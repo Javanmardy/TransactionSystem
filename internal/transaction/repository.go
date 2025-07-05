@@ -1,12 +1,5 @@
 package transaction
 
-type Transaction struct {
-	ID     int
-	UserID int
-	Amount float64
-	Status string
-}
-
 type Repository interface {
 	Create(t *Transaction) error
 	FindByID(id int) (*Transaction, error)
