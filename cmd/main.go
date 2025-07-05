@@ -1,6 +1,7 @@
 package main
 
 import (
+	"TransactionSystem/internal/auth"
 	"TransactionSystem/internal/transaction"
 	"log"
 	"net/http"
@@ -15,4 +16,7 @@ func main() {
 
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
+
+	http.HandleFunc("/login", auth.LoginHandler)
+
 }
