@@ -1,49 +1,47 @@
 package report
 
-import "TransactionSystem/internal/transaction"
+import (
+	"TransactionSystem/internal/transaction"
+)
 
 type Report struct {
-	UserID            int
-	TotalTransactions int
-	SuccessfulCount   int
-	FailedCount       int
-	TotalAmount       float64
+	TotalCount    int
+	SuccessCount  int
+	FailedCount   int
+	TotalAmount   float64
+	SuccessAmount float64
+	FailedAmount  float64
+	SuccessRate   float64
 }
 
 type Service interface {
-	GenerateUserReport(userID int) *Report
+	UserReport(userID int) Report
 }
 
-type reportService struct {
-	transactionSvc transaction.Service
+type service struct {
+	txService transaction.Service
 }
 
-func NewService(transactionSvc transaction.Service) Service {
-	return &reportService{
-		transactionSvc: transactionSvc,
-	}
+func NewService(txSvc transaction.Service) Service {
+	return &service{txService: txSvc}
 }
 
-func (s *reportService) GenerateUserReport(userID int) *Report {
-	transactions := s.transactionSvc.ListUserTransactions(userID)
-
-	var success, fail int
-	var amount float64
-
-	for _, t := range transactions {
+func (s *service) UserReport(userID int) Report {
+	txs := s.txService.ListUserTransactions(userID)
+	var rep Report
+	rep.TotalCount = len(txs)
+	for _, t := range txs {
+		rep.TotalAmount += t.Amount
 		if t.Status == "success" {
-			success++
+			rep.SuccessCount++
+			rep.SuccessAmount += t.Amount
 		} else {
-			fail++
+			rep.FailedCount++
+			rep.FailedAmount += t.Amount
 		}
-		amount += t.Amount
 	}
-
-	return &Report{
-		UserID:            userID,
-		TotalTransactions: len(transactions),
-		SuccessfulCount:   success,
-		FailedCount:       fail,
-		TotalAmount:       amount,
+	if rep.TotalCount > 0 {
+		rep.SuccessRate = float64(rep.SuccessCount) / float64(rep.TotalCount)
 	}
+	return rep
 }
