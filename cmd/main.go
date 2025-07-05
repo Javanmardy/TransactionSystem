@@ -12,11 +12,10 @@ func main() {
 	svc := transaction.NewService(repo)
 	handler := transaction.NewHandler(svc)
 
-	http.HandleFunc("/transactions", handler.ListUserTransactions)
+	http.Handle("/transactions", auth.AuthMiddleware(http.HandlerFunc(handler.ListUserTransactions)))
+	http.HandleFunc("/login", auth.LoginHandler)
 
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
-
-	http.HandleFunc("/login", auth.LoginHandler)
 
 }
