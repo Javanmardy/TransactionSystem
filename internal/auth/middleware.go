@@ -1,13 +1,14 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"strings"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
-var JwtSecret = []byte("very-secret-key")
+type contextKey string
+
+const RoleKey = contextKey("role")
 
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -18,14 +19,26 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
-		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			return JwtSecret, nil
-		})
-		if err != nil || !token.Valid {
+		claims, err := ParseJWT(tokenString)
+		if err != nil {
 			http.Error(w, "Invalid or expired token", http.StatusUnauthorized)
 			return
 		}
 
+		role, _ := claims["role"].(string)
+		ctx := context.WithValue(r.Context(), RoleKey, role)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func OnlyAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		role, _ := r.Context().Value(RoleKey).(string)
+		if role != "admin" {
+			http.Error(w, "Forbidden: Admins only", http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
 }

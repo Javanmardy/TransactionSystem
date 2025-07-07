@@ -3,25 +3,22 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
-	"time"
-
-	"github.com/golang-jwt/jwt/v5"
 )
 
-var jwtSecret = []byte("very-secret-key")
+var users = map[string]struct {
+	Password string
+	Role     string
+}{
+	"amirhossein": {"adminpass", "admin"},
+	"sara":        {"test", "user"},
+}
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 }
-
 type LoginResponse struct {
 	Token string `json:"token"`
-}
-
-var users = map[string]string{
-	"javanmardy": "password1",
-	"sara":       "password2",
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request) {
@@ -30,24 +27,20 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
-	password, ok := users[req.Username]
-	if !ok || password != req.Password {
+
+	user, ok := users[req.Username]
+	if !ok || user.Password != req.Password {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	claims := jwt.MapClaims{
-		"username": req.Username,
-		"exp":      time.Now().Add(time.Hour * 24).Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString(jwtSecret)
+	tokenString, err := GenerateJWT(req.Username, user.Role)
 	if err != nil {
 		http.Error(w, "could not generate token", http.StatusInternalServerError)
 		return
 	}
 
-	resp := LoginResponse{Token: signedToken}
+	resp := LoginResponse{Token: tokenString}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }

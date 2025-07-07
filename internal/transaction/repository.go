@@ -1,5 +1,7 @@
 package transaction
 
+import "database/sql"
+
 type Repository interface {
 	Create(t *Transaction) error
 	FindByID(id int) (*Transaction, error)
@@ -46,21 +48,45 @@ func (r *MockRepo) ListByUser(userID int) ([]Transaction, error) {
 }
 
 type DBRepo struct {
-	// db *sql.DB
+	db *sql.DB
 }
 
-func NewDBRepo() *DBRepo {
-	return &DBRepo{}
+func NewDBRepo(db *sql.DB) *DBRepo {
+	return &DBRepo{db: db}
 }
 
 func (r *DBRepo) Create(t *Transaction) error {
-	return nil
+	_, err := r.db.Exec("INSERT INTO transactions(user_id, amount, status) VALUES (?, ?, ?)", t.UserID, t.Amount, t.Status)
+	return err
 }
 
 func (r *DBRepo) FindByID(id int) (*Transaction, error) {
-	return nil, nil
+	row := r.db.QueryRow("SELECT id, user_id, amount, status FROM transactions WHERE id = ?", id)
+	var tx Transaction
+	err := row.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &tx, nil
 }
 
 func (r *DBRepo) ListByUser(userID int) ([]Transaction, error) {
-	return nil, nil
+	rows, err := r.db.Query("SELECT id, user_id, amount, status FROM transactions WHERE user_id = ?", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var txs []Transaction
+	for rows.Next() {
+		var tx Transaction
+		err := rows.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status)
+		if err != nil {
+			continue
+		}
+		txs = append(txs, tx)
+	}
+	return txs, nil
 }

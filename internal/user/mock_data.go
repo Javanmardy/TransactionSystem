@@ -1,11 +1,5 @@
 package user
 
-type User struct {
-	ID       int
-	Username string
-	Email    string
-}
-
 var mockUsers = []User{
 	{ID: 1, Username: "amirhossein", Email: "amirhossein@example.com"},
 	{ID: 2, Username: "armin", Email: "armin@example.com"},

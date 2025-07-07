@@ -10,7 +10,12 @@ import (
 )
 
 func main() {
-	repo := transaction.NewMockRepo()
+	db, err := transaction.InitDB("root", "password", "localhost:3306", "transaction_db")
+	if err != nil {
+		log.Fatal("Failed to connect to DB: ", err)
+	}
+
+	repo := transaction.NewDBRepo(db)
 	svc := transaction.NewService(repo)
 	handler := transaction.NewHandler(svc)
 	batchHandler := batch.NewHandler(svc)
