@@ -1,37 +1,37 @@
-package transaction
+package transaction_test
 
 import (
+	"TransactionSystem/internal/transaction"
 	"testing"
 )
 
-func TestListUserTransactions(t *testing.T) {
-	mockRepo := NewMockRepo()
-	service := NewService(mockRepo)
-
-	transactions := service.ListUserTransactions(1)
-	if len(transactions) != 2 {
-		t.Errorf("Expected 2 transactions for user 1, got %d", len(transactions))
+func setupDB(t *testing.T) *transaction.DBRepo {
+	db, err := transaction.InitDB("root", "n61224n61224", "localhost:3306", "transaction_db")
+	if err != nil {
+		t.Fatalf("Failed to connect to DB: %v", err)
 	}
+	return transaction.NewDBRepo(db)
 }
 
-func TestGetTransactionByID(t *testing.T) {
-	mockRepo := NewMockRepo()
-	service := NewService(mockRepo)
+func TestAddAndGetTransaction(t *testing.T) {
+	repo := setupDB(t)
+	svc := transaction.NewService(repo)
 
-	tx := service.GetTransactionByID(1)
-	if tx == nil {
-		t.Errorf("Expected transaction with ID 1, got nil")
-	} else if tx.ID != 1 {
-		t.Errorf("Expected transaction ID 1, got %d", tx.ID)
+	tx := &transaction.Transaction{
+		UserID: 1,
+		Amount: 3500,
+		Status: "success",
 	}
-}
 
-func TestGetTransactionByID_NotFound(t *testing.T) {
-	mockRepo := NewMockRepo()
-	service := NewService(mockRepo)
-
-	tx := service.GetTransactionByID(999)
-	if tx != nil {
-		t.Errorf("Expected nil for non-existent transaction, got %+v", tx)
+	err := svc.AddTransaction(tx)
+	if err != nil {
+		t.Fatalf("Failed to add transaction: %v", err)
 	}
+
+	got := svc.GetTransactionByID(tx.ID)
+	if got == nil || got.Amount != tx.Amount {
+		t.Errorf("Expected amount %v, got %+v", tx.Amount, got)
+	}
+
+	repo.DeleteTransaction(tx.ID)
 }

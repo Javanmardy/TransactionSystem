@@ -6,45 +6,8 @@ type Repository interface {
 	Create(t *Transaction) error
 	FindByID(id int) (*Transaction, error)
 	ListByUser(userID int) ([]Transaction, error)
-}
-
-type MockRepo struct {
-	data []Transaction
-}
-
-func NewMockRepo() *MockRepo {
-	return &MockRepo{
-		data: []Transaction{
-			{ID: 1, UserID: 1, Amount: 1000, Status: "success"},
-			{ID: 2, UserID: 1, Amount: 200, Status: "failed"},
-			{ID: 3, UserID: 2, Amount: 300, Status: "success"},
-		},
-	}
-}
-
-func (r *MockRepo) Create(t *Transaction) error {
-	t.ID = len(r.data) + 1
-	r.data = append(r.data, *t)
-	return nil
-}
-
-func (r *MockRepo) FindByID(id int) (*Transaction, error) {
-	for _, v := range r.data {
-		if v.ID == id {
-			return &v, nil
-		}
-	}
-	return nil, nil
-}
-
-func (r *MockRepo) ListByUser(userID int) ([]Transaction, error) {
-	var result []Transaction
-	for _, v := range r.data {
-		if v.UserID == userID {
-			result = append(result, v)
-		}
-	}
-	return result, nil
+	AddTransaction(tx *Transaction) error
+	DeleteTransaction(id int) error
 }
 
 type DBRepo struct {
@@ -89,4 +52,22 @@ func (r *DBRepo) ListByUser(userID int) ([]Transaction, error) {
 		txs = append(txs, tx)
 	}
 	return txs, nil
+}
+
+func (r *DBRepo) AddTransaction(tx *Transaction) error {
+	result, err := r.db.Exec(
+		"INSERT INTO transactions (user_id, amount, status) VALUES (?, ?, ?)",
+		tx.UserID, tx.Amount, tx.Status,
+	)
+	if err != nil {
+		return err
+	}
+	id, _ := result.LastInsertId()
+	tx.ID = int(id)
+	return nil
+}
+
+func (r *DBRepo) DeleteTransaction(id int) error {
+	_, err := r.db.Exec("DELETE FROM transactions WHERE id = ?", id)
+	return err
 }

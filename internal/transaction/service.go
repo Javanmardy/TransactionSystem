@@ -3,6 +3,7 @@ package transaction
 type Service interface {
 	GetTransactionByID(id int) *Transaction
 	ListUserTransactions(userID int) []Transaction
+	AddTransaction(tx *Transaction) error
 }
 
 type service struct {
@@ -21,4 +22,8 @@ func (s *service) GetTransactionByID(id int) *Transaction {
 func (s *service) ListUserTransactions(userID int) []Transaction {
 	txs, _ := s.repo.ListByUser(userID)
 	return txs
+}
+
+func (s *service) AddTransaction(tx *Transaction) error {
+	return s.repo.AddTransaction(tx)
 }
