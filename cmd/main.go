@@ -23,7 +23,6 @@ func main() {
 	reportSvc := report.NewService(svc)
 	reportHandler := report.NewHandler(reportSvc)
 
-	http.Handle("/transactions", auth.AuthMiddleware(http.HandlerFunc(handler.ListUserTransactions)))
 	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
 	http.HandleFunc("/login", auth.LoginHandler)
 	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))

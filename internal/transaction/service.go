@@ -1,5 +1,26 @@
 package transaction
 
+import (
+	"TransactionSystem/internal/cache"
+	"encoding/json"
+)
+
+func (s *service) GetTransactionByID(id int) *Transaction {
+	cm := cache.GetManager()
+	if data, err := cm.GetTransaction(id); err == nil && data != "" {
+		var tx Transaction
+		if err := json.Unmarshal([]byte(data), &tx); err == nil {
+			return &tx
+		}
+	}
+	tx, _ := s.repo.FindByID(id)
+	if tx != nil {
+		data, _ := json.Marshal(tx)
+		_ = cm.SetTransaction(tx.ID, string(data))
+	}
+	return tx
+}
+
 type Service interface {
 	GetTransactionByID(id int) *Transaction
 	ListUserTransactions(userID int) []Transaction
@@ -12,11 +33,6 @@ type service struct {
 
 func NewService(repo Repository) Service {
 	return &service{repo: repo}
-}
-
-func (s *service) GetTransactionByID(id int) *Transaction {
-	tx, _ := s.repo.FindByID(id)
-	return tx
 }
 
 func (s *service) ListUserTransactions(userID int) []Transaction {

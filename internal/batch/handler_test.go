@@ -1,50 +1,52 @@
 package batch
 
 import (
+	"TransactionSystem/internal/transaction"
 	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"TransactionSystem/internal/transaction"
 )
 
 func TestProcessBatch(t *testing.T) {
-	mockRepo := transaction.NewMockRepo()
-	txService := transaction.NewService(mockRepo)
-	handler := NewHandler(txService)
+	db, err := transaction.InitDB("root", "n61224n61224", "localhost:3306", "transaction_db")
+	if err != nil {
+		t.Fatalf("failed to connect to DB: %v", err)
+	}
+	repo := transaction.NewDBRepo(db)
+	svc := transaction.NewService(repo)
+	handler := NewHandler(svc)
 
 	reqBody := BatchRequest{
 		UserID: 1,
 		Transactions: []transaction.Transaction{
-			{ID: 100, Amount: 1000, Status: "pending"},
-			{ID: 101, Amount: -50, Status: "pending"},
+			{Amount: 500, Status: "success"},
+			{Amount: -100, Status: "failed"},
 		},
 	}
 	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest(http.MethodPost, "/batch", bytes.NewBuffer(body))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
+	req := httptest.NewRequest("POST", "/batch", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
 
-	handler.ProcessBatch(rr, req)
+	handler.ProcessBatch(rec, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("Expected status OK, got %d", rr.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status code: %d", rec.Code)
 	}
 
-	var res []BatchResult
-	if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
-		t.Fatalf("Could not parse response: %v", err)
+	var results []BatchResult
+	if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
 	}
 
-	if len(res) != 2 {
-		t.Errorf("Expected 2 batch results, got %d", len(res))
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
 	}
-	if res[0].Status != "success" {
-		t.Errorf("Expected first transaction to succeed, got %s", res[0].Status)
+	if results[0].Status != "success" {
+		t.Errorf("expected first status to be success, got %s", results[0].Status)
 	}
-	if res[1].Status != "failed" || res[1].Error != "amount must be positive" {
-		t.Errorf("Expected second transaction to fail with error 'amount must be positive', got status %s error %s", res[1].Status, res[1].Error)
+	if results[1].Status != "failed" || results[1].Error != "amount must be positive" {
+		t.Errorf("expected error for negative amount, got %+v", results[1])
 	}
 }
