@@ -1,16 +1,17 @@
 package auth
 
 import (
+	"TransactionSystem/internal/user"
 	"encoding/json"
 	"net/http"
 )
 
-var users = map[string]struct {
-	Password string
-	Role     string
-}{
-	"amirhossein": {"adminpass", "admin"},
-	"sara":        {"test", "user"},
+type Handler struct {
+	userService user.Service
+}
+
+func NewHandler(userService user.Service) *Handler {
+	return &Handler{userService: userService}
 }
 
 type LoginRequest struct {
@@ -21,20 +22,20 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
-func LoginHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	user, ok := users[req.Username]
-	if !ok || user.Password != req.Password {
+	usr := h.userService.GetUserByUsername(req.Username)
+	if usr == nil || usr.Password != req.Password {
 		http.Error(w, "invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
-	tokenString, err := GenerateJWT(req.Username, user.Role)
+	tokenString, err := GenerateJWT(usr.ID, usr.Username, usr.Role)
 	if err != nil {
 		http.Error(w, "could not generate token", http.StatusInternalServerError)
 		return

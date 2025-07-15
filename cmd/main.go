@@ -1,40 +1,48 @@
 package main
 
 import (
+	"database/sql"
+	"log"
+	"net/http"
+
 	"TransactionSystem/internal/auth"
 	"TransactionSystem/internal/batch"
 	"TransactionSystem/internal/report"
 	"TransactionSystem/internal/transaction"
-	"log"
-	"net/http"
+	"TransactionSystem/internal/user"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 func main() {
-	db, err := transaction.InitDB("root", "n61224n61224", "localhost:3306", "transaction_db")
+	db, err := sql.Open("mysql", "root:n61224n61224@tcp(localhost:3306)/transaction_db")
 	if err != nil {
-		log.Fatal("Failed to connect to DB: ", err)
+		log.Fatal("Failed to connect to MySQL:", err)
 	}
+	defer db.Close()
 
-	repo := transaction.NewDBRepo(db)
-	svc := transaction.NewService(repo)
-	handler := transaction.NewHandler(svc)
-	batchHandler := batch.NewHandler(svc)
-
-	reportSvc := report.NewService(svc)
+	userService := user.NewMySQLService(db)
+	txRepo := transaction.NewDBRepo(db)
+	txService := transaction.NewService(txRepo)
+	txHandler := transaction.NewHandler(txService)
+	batchHandler := batch.NewHandler(txService)
+	reportSvc := report.NewService(txService)
 	reportHandler := report.NewHandler(reportSvc)
+	authHandler := auth.NewHandler(userService)
 
-	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
-	http.HandleFunc("/login", auth.LoginHandler)
-	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
+	http.HandleFunc("/login", authHandler.LoginHandler)
+
 	http.Handle("/transactions", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
-			handler.ListUserTransactions(w, r)
+			txHandler.ListUserTransactions(w, r)
 		} else if r.Method == http.MethodPost {
-			handler.AddTransactionHandler(w, r)
+			txHandler.AddTransactionHandler(w, r)
 		} else {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
+	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
 
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
