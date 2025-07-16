@@ -21,17 +21,20 @@ func main() {
 	}
 	defer db.Close()
 
-
 	userService := user.NewMySQLService(db)
 	txRepo := transaction.NewDBRepo(db)
 	txService := transaction.NewService(txRepo)
 	txHandler := transaction.NewHandler(txService)
-	batchHandler := batch.NewHandler(txService)
+
+	processor := batch.NewBatchProcessor(txService, []batch.ValidationStrategy{})
+	batchHandler := batch.NewHandler(processor)
+
 	reportSvc := report.NewService(txService)
 	reportHandler := report.NewHandler(reportSvc)
 	authHandler := auth.NewHandler(userService)
 
 	http.HandleFunc("/login", authHandler.LoginHandler)
+	http.HandleFunc("/register", authHandler.RegisterHandler)
 
 	http.Handle("/transactions", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodGet {
@@ -42,7 +45,9 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+
 	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
+	http.Handle("/report/all", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AllReports)))
 	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
 
 	log.Println("Server running at :8080")

@@ -43,7 +43,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		fmt.Println("[AuthMiddleware] UserID from token:", userID)
 
 		ctx := context.WithValue(r.Context(), RoleKey, role)
-		ctx = context.WithValue(ctx, contextKey("username"), username)
 		ctx = context.WithValue(ctx, UserIDKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 

@@ -25,3 +25,11 @@ func (h *Handler) UserReport(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(rep)
 }
+
+func (h *Handler) AllReports(w http.ResponseWriter, r *http.Request) {
+	role, _ := r.Context().Value("role").(string)
+	if role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+}

@@ -56,3 +56,7 @@ func (h *Handler) AddTransactionHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(tx)
 }
+
+func (h *Handler) UserTransactions(w http.ResponseWriter, r *http.Request) {
+	// TODO: implement this handler or remove if not needed
+}

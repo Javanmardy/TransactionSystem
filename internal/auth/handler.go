@@ -45,3 +45,33 @@ func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
+
+func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+	existingUser := h.userService.GetUserByUsername(req.Username)
+	if existingUser != nil {
+		http.Error(w, "Username already exists", http.StatusConflict)
+		return
+	}
+	newUser := &user.User{
+		Username: req.Username,
+		Password: req.Password,
+		Role:     "user",
+		Email:    req.Email,
+	}
+	err := h.userService.AddUser(newUser)
+	if err != nil {
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusCreated)
+	w.Write([]byte("User created"))
+}
