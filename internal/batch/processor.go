@@ -4,6 +4,7 @@ import (
 	"TransactionSystem/internal/transaction"
 )
 
+
 type BatchProcessor struct {
 	strategies []ValidationStrategy
 	service    transaction.Service

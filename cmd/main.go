@@ -21,6 +21,7 @@ func main() {
 	}
 	defer db.Close()
 
+
 	userService := user.NewMySQLService(db)
 	txRepo := transaction.NewDBRepo(db)
 	txService := transaction.NewService(txRepo)

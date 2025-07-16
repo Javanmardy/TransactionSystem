@@ -3,6 +3,7 @@ package batch
 import (
 	"TransactionSystem/internal/transaction"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,16 +20,19 @@ func TestProcessBatch(t *testing.T) {
 	handler := NewHandler(svc)
 
 	reqBody := BatchRequest{
-		UserID: 1,
 		Transactions: []transaction.Transaction{
 			{Amount: 500, Status: "success"},
 			{Amount: -100, Status: "failed"},
 		},
 	}
+
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/batch", bytes.NewReader(body))
-	rec := httptest.NewRecorder()
 
+	ctx := context.WithValue(req.Context(), "userID", 1)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
 	handler.ProcessBatch(rec, req)
 
 	if rec.Code != http.StatusOK {
