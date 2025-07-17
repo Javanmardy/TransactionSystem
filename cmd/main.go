@@ -26,8 +26,7 @@ func main() {
 	txService := transaction.NewService(txRepo)
 	txHandler := transaction.NewHandler(txService)
 
-	processor := batch.NewBatchProcessor(txService, []batch.ValidationStrategy{})
-	batchHandler := batch.NewHandler(processor)
+	batchHandler := batch.NewHandler(txService)
 
 	reportSvc := report.NewService(txService)
 	reportHandler := report.NewHandler(reportSvc)

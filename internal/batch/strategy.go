@@ -26,3 +26,12 @@ func (s *ValidStatusStrategy) Validate(tx *transaction.Transaction) error {
 	}
 	return nil
 }
+
+type PositiveUserIDStrategy struct{}
+
+func (s *PositiveUserIDStrategy) Validate(tx *transaction.Transaction) error {
+	if tx.UserID <= 0 {
+		return errors.New("user_id must be positive")
+	}
+	return nil
+}

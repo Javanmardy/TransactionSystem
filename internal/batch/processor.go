@@ -39,7 +39,9 @@ func (bp *BatchProcessor) Process(txs []transaction.Transaction, userID int) []B
 			})
 			continue
 		}
-		tx.UserID = userID
+		if userID > 0 {
+			tx.UserID = userID
+		}
 		_ = bp.service.AddTransaction(tx)
 		results = append(results, BatchResult{
 			ID:     tx.ID,
