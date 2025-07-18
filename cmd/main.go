@@ -20,7 +20,8 @@ func main() {
 		log.Fatal("Failed to connect to MySQL:", err)
 	}
 	defer db.Close()
-
+	fs := http.FileServer(http.Dir("./ui"))
+	http.Handle("/", fs)
 	userService := user.NewMySQLService(db)
 	txRepo := transaction.NewDBRepo(db)
 	txService := transaction.NewService(txRepo)

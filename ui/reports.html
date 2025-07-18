@@ -1,0 +1,156 @@
+<!-- reports.html (sync header + date fix) -->
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reports · Transaction System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- Top Nav -->
+    <nav class="bg-blue-600 text-white">
+        <div class="container mx-auto flex justify-between items-center px-4 py-4">
+            <h1 class="text-xl font-bold">Dashboard</h1>
+            <div class="space-x-4">
+                <a href="dashboard.html" class="hover:underline">Dashboard</a>
+                <a href="reports.html" class="hover:underline">Reports</a>
+                <button id="logoutBtn" class="bg-white/20 px-3 py-1 rounded hover:bg-white/30">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto px-4 py-6 flex-1">
+        <!-- Summary cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Total&nbsp;Transactions</h2>
+                <p id="totalTx" class="text-3xl font-bold">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Success</h2>
+                <p id="successTx" class="text-3xl font-bold text-green-600">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Failed</h2>
+                <p id="failedTx" class="text-3xl font-bold text-red-600">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Current&nbsp;Balance</h2>
+                <p id="currentBal" class="text-3xl font-bold text-blue-600">0</p>
+            </div>
+        </div>
+
+        <!-- Filters + export -->
+        <div class="flex flex-col md:flex-row md:items-end md:gap-4 mb-6">
+            <div class="flex gap-4 mb-4 md:mb-0">
+                <div>
+                    <label for="startDate" class="block text-sm text-gray-600 mb-1">From</label>
+                    <input type="date" id="startDate" class="border rounded px-3 py-2 w-full" />
+                </div>
+                <div>
+                    <label for="endDate" class="block text-sm text-gray-600 mb-1">To</label>
+                    <input type="date" id="endDate" class="border rounded px-3 py-2 w-full" />
+                </div>
+            </div>
+            <button id="filterBtn"
+                class="bg-blue-600 text-white rounded px-6 py-2 hover:bg-blue-700 transition">Apply&nbsp;Filter</button>
+            <button id="exportBtn"
+                class="bg-green-600 text-white rounded px-6 py-2 hover:bg-green-700 transition md:ml-auto mt-4 md:mt-0">Export&nbsp;CSV</button>
+        </div>
+
+        <!-- Transactions table -->
+        <div class="bg-white shadow rounded overflow-x-auto">
+            <table class="min-w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-600">
+                    <tr>
+                        <th class="p-3">ID</th>
+                        <th class="p-3">User</th>
+                        <th class="p-3">Amount</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Date</th>
+                    </tr>
+                </thead>
+                <tbody id="txBody"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        const API_BASE = ""; // همان origin فعلی
+
+        const token = localStorage.getItem("token");
+        if (!token) window.location.replace("index.html");
+        const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+
+        function fmt(dateStr) {
+            const d = new Date(dateStr);
+            return isNaN(d.getTime()) ? "-" : d.toLocaleString();
+        }
+
+        function loadReports() {
+            const start = document.getElementById("startDate").value;
+            const end = document.getElementById("endDate").value;
+
+            let url = `${API_BASE}/transactions`;
+            const q = [];
+            if (start) q.push(`start=${start}`);
+            if (end) q.push(`end=${end}`);
+            if (q.length) url += `?${q.join("&")}`;
+
+            fetch(url, { headers })
+                .then(r => r.json())
+                .then(list => {
+                    const body = document.getElementById("txBody");
+                    body.innerHTML = "";
+                    let success = 0, failed = 0, balance = 0;
+
+                    list.forEach(tx => {
+                        // بعضی API ها فیلد time را created_at یا createdAt می‌فرستند
+                        const when = tx.created_at || tx.createdAt || tx.date;
+
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `
+              <td class="p-3 border-b">${tx.id}</td>
+              <td class="p-3 border-b">${tx.username || tx.user_id}</td>
+              <td class="p-3 border-b">${tx.amount}</td>
+              <td class="p-3 border-b ${tx.status === 'success' ? 'text-green-600' : 'text-red-600'}">${tx.status}</td>
+              <td class="p-3 border-b">${fmt(when)}</td>`;
+                        body.appendChild(tr);
+
+                        if (tx.status === "success") { success++; balance += tx.amount; } else { failed++; }
+                    });
+
+                    document.getElementById("totalTx").textContent = list.length;
+                    document.getElementById("successTx").textContent = success;
+                    document.getElementById("failedTx").textContent = failed;
+                    document.getElementById("currentBal").textContent = balance;
+                })
+                .catch(console.error);
+        }
+
+        // events
+        document.getElementById("filterBtn").addEventListener("click", loadReports);
+        document.getElementById("exportBtn").addEventListener("click", () => {
+            const start = document.getElementById("startDate").value;
+            const end = document.getElementById("endDate").value;
+            let url = `${API_BASE}/report/export`;
+            const q = [];
+            if (start) q.push(`start=${start}`);
+            if (end) q.push(`end=${end}`);
+            if (q.length) url += `?${q.join("&")}`;
+            window.open(url, "_blank");
+        });
+
+        document.getElementById("logoutBtn").addEventListener("click", () => {
+            localStorage.removeItem("token");
+            window.location.replace("index.html");
+        });
+
+        loadReports(); // initial
+    </script>
+</body>
+
+</html>
