@@ -43,9 +43,7 @@
         </div>
 
         <!-- Filters + export -->
-        <!-- … بالای صفحه همان است -->
 
-        <!-- ADD TRANSACTION + FILTER در یک کارت -->
         <section class="bg-white p-6 rounded-lg shadow space-y-6 mb-6">
             <h2 class="text-xl font-bold">Add Transaction</h2>
 
@@ -105,8 +103,8 @@
         if (!token) location.replace("index.html");
         const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
 
-        let allTx = [];          // کل داده از سرور
-        let viewTx = [];         // نسخه فیلتر‑شده برای جدول/کارت/CSV
+        let allTx = [];
+        let viewTx = [];
 
         /* helpers */
         const fmt = ts => isNaN(new Date(ts)) ? "-" : new Date(ts).toLocaleString();
@@ -115,10 +113,9 @@
         /* ===== fetch once ===== */
         async function loadAll() {
             allTx = await fetch("/transactions", { headers }).then(r => r.json());
-            applyFilter();         // بعد از دریافت، فوراً فیلتر/نمایش
+            applyFilter();
         }
 
-        /* ===== فیلتر و بازسازی نمایش ===== */
         function applyFilter() {
             const s = document.getElementById("startDate").value;
             const e = document.getElementById("endDate").value;
@@ -132,7 +129,6 @@
             buildSummary();
         }
 
-        /* جدول */
         function buildTable() {
             const body = document.getElementById("txTableBody");
             body.innerHTML = "";
@@ -148,7 +144,6 @@
             });
         }
 
-        /* کارت‌های بالا */
         function buildSummary() {
             let tot = 0, succ = 0, fail = 0, bal = 0;
             viewTx.forEach(t => {
@@ -162,7 +157,6 @@
             setText("currentBal", bal);
         }
 
-        /* افزودن تراکنش */
         document.getElementById("addTxForm").onsubmit = async e => {
             e.preventDefault();
             await fetch("/transactions", {
@@ -172,14 +166,12 @@
                 })
             });
             e.target.reset();
-            loadAll();       // دادهٔ تازه را بکش
+            loadAll();
         };
 
-        /* فیلتر و CSV */
         document.getElementById("filterBtn").onclick = applyFilter;
         document.getElementById("exportBtn").onclick = () => downloadCSV(viewTx);
 
-        /* خروج */
         document.getElementById("logoutBtn").onclick = () => { localStorage.removeItem("token"); location.replace("index.html"); };
 
         /* ===== CSV ===== */

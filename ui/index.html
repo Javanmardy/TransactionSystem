@@ -240,7 +240,6 @@
                         loginSpinner.classList.add('hidden');
 
                         // Show success (in a real app, you'd redirect or show a success message)
-                        // فرض: بعد از موفقیت در لاگین
                         fetch('/login', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -249,14 +248,11 @@
                             .then(res => res.json())
                             .then(data => {
                                 if (data.token) {
-                                    // ➊ توکن را ذخیره کن
                                     localStorage.setItem('token', data.token);
 
-                                    // ➋ نقش را مستقیم از خودِ توکن JWT دربیاور
                                     const payload = JSON.parse(atob(data.token.split('.')[1])); // decode base64
                                     const role = payload.role;
 
-                                    // ➌ ریدایرکت بر اساس نقش
                                     if (role === 'admin') {
                                         window.location.href = 'admin.html';
                                     } else {
@@ -349,23 +345,38 @@
                 }
 
                 if (isValid) {
-                    // Show loading state
                     registerBtn.disabled = true;
                     registerBtnText.textContent = 'Registering...';
                     registerSpinner.classList.remove('hidden');
 
-                    // Simulate API call
-                    setTimeout(() => {
-                        // Hide loading state
-                        registerBtn.disabled = false;
-                        registerBtnText.textContent = 'Register';
-                        registerSpinner.classList.add('hidden');
+                    fetch('/register', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            username: username.value.trim(),
+                            email: email.value.trim(),
+                            password: password.value
+                        })
+                    })
+                        .then(res => {
+                            registerBtn.disabled = false;
+                            registerBtnText.textContent = 'Register';
+                            registerSpinner.classList.add('hidden');
 
-                        // Show success and switch to login
-                        alert('Registration successful! (This is a demo)');
-                        document.querySelector('.relative').classList.remove('active-form');
-                        registerForm.reset();
-                    }, 1500);
+                            if (res.ok) {
+                                alert('Registration successful! You can now log in.');
+                                document.querySelector('.relative').classList.remove('active-form');
+                                registerForm.reset();
+                            } else if (res.status === 409) {
+                                alert('Username or email already exists');
+                            } else {
+                                res.text().then(t => alert('Error: ' + t));
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Register error →', err);
+                            alert('Request failed');
+                        });
                 }
             });
         });
