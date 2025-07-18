@@ -1,6 +1,10 @@
 package transaction
 
-import "database/sql"
+import (
+	"database/sql"
+	"log"
+	"time"
+)
 
 type Repository interface {
 	Create(t *Transaction) error
@@ -24,9 +28,9 @@ func (r *DBRepo) Create(t *Transaction) error {
 }
 
 func (r *DBRepo) FindByID(id int) (*Transaction, error) {
-	row := r.db.QueryRow("SELECT id, user_id, amount, status FROM transactions WHERE id = ?", id)
+	row := r.db.QueryRow("SELECT id, user_id, amount, status, created_at FROM transactions WHERE id = ?", id)
 	var tx Transaction
-	err := row.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status)
+	err := row.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status, &tx.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -37,7 +41,7 @@ func (r *DBRepo) FindByID(id int) (*Transaction, error) {
 }
 
 func (r *DBRepo) ListByUser(userID int) ([]Transaction, error) {
-	rows, err := r.db.Query("SELECT id, user_id, amount, status FROM transactions WHERE user_id = ?", userID)
+	rows, err := r.db.Query("SELECT id, user_id, amount, status, created_at FROM transactions WHERE user_id = ?", userID)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +49,7 @@ func (r *DBRepo) ListByUser(userID int) ([]Transaction, error) {
 	var txs []Transaction
 	for rows.Next() {
 		var tx Transaction
-		err := rows.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status)
+		err := rows.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status, &tx.CreatedAt)
 		if err != nil {
 			continue
 		}
@@ -64,7 +68,26 @@ func (r *DBRepo) AddTransaction(tx *Transaction) error {
 	}
 	id, _ := result.LastInsertId()
 	tx.ID = int(id)
+
+	var createdAtStr string
+	row := r.db.QueryRow("SELECT created_at FROM transactions WHERE id = ?", tx.ID)
+	err = row.Scan(&createdAtStr)
+	if err != nil {
+		log.Println("Failed to fetch created_at:", err)
+	} else {
+		t, err := time.Parse("2006-01-02 15:04:05", createdAtStr)
+		if err != nil {
+			log.Println("Failed to parse created_at:", err, createdAtStr)
+		} else {
+			tx.CreatedAt = t
+		}
+	}
+	if err != nil {
+		log.Println("Failed to fetch created_at:", err)
+	}
+
 	return nil
+
 }
 
 func (r *DBRepo) DeleteTransaction(id int) error {

@@ -15,7 +15,11 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("mysql", "root:n61224n61224@tcp(localhost:3306)/transaction_db")
+	db, err := sql.Open(
+		"mysql",
+		"root:n61224n61224@tcp(localhost:3306)/transaction_db?parseTime=true&loc=Local",
+	)
+
 	if err != nil {
 		log.Fatal("Failed to connect to MySQL:", err)
 	}

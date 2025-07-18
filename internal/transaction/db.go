@@ -14,13 +14,14 @@ func InitDB(user, password, host, dbname string) (*sql.DB, error) {
 		return nil, err
 	}
 	schema := `
-	CREATE TABLE IF NOT EXISTS transactions (
-		id INT AUTO_INCREMENT PRIMARY KEY,
-		user_id INT,
-		amount DOUBLE,
-		status VARCHAR(20)
-	);
-	`
+CREATE TABLE IF NOT EXISTS transactions (
+	id INT AUTO_INCREMENT PRIMARY KEY,
+	user_id INT,
+	amount DOUBLE,
+	status VARCHAR(20),
+	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+`
 	_, err = db.Exec(schema)
 	if err != nil {
 		return nil, err
