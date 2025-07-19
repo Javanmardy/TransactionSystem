@@ -55,6 +55,7 @@ func main() {
 	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
 	http.Handle("/report/all", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AllReports)))
 	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
+	http.Handle("/report/summary", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AdminReport)))
 
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

@@ -40,3 +40,13 @@ func (h *Handler) AllReports(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(txs)
 }
+func (h *Handler) AdminReport(w http.ResponseWriter, r *http.Request) {
+	role, _ := r.Context().Value(auth.RoleKey).(string)
+	if role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	rep := h.svc.AllReport()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(rep)
+}

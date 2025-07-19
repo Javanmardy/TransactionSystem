@@ -81,11 +81,11 @@
                 <table class="min-w-full text-sm text-left">
                     <thead>
                         <tr class="border-b">
-                            <th class="py-2 px-3">ID</th>
-                            <th class="py-2 px-3">User</th>
-                            <th class="py-2 px-3">Amount</th>
-                            <th class="py-2 px-3">Status</th>
-                            <th class="py-2 px-3">Date</th>
+                            <th class="py-2 px-3 text-center">ID</th>
+                            <th class="py-2 px-3 text-center">User</th>
+                            <th class="py-2 px-3 text-center">Amount</th>
+                            <th class="py-2 px-3 text-center">Status</th>
+                            <th class="py-2 px-3 text-center">Date</th>
                         </tr>
                     </thead>
                     <tbody id="txTableBody"></tbody>
@@ -135,10 +135,11 @@
             viewTx.forEach(tx => {
                 body.insertAdjacentHTML("beforeend", `
       <tr>
-        <td class="p-3 border-b">${tx.id}</td>
-        <td class="p-3 border-b">${tx.amount}</td>
-        <td class="p-3 border-b ${tx.status === 'success' ? 'text-green-600' : 'text-red-600'}">${tx.status}</td>
-        <td class="p-3 border-b">${fmt(tx.created_at)}</td>
+        <td class="p-3 border-b text-center">${tx.id}</td>
+        <td class="py-2 px-3 text-center">${tx.user_id}</td>
+        <td class="p-3 border-b text-center">${tx.amount}</td>
+        <td class="p-3 border-b text-center ${tx.status === 'success' ? 'text-green-600' : 'text-red-600'}">${tx.status}</td>
+        <td class="p-3 border-b text-center">${fmt(tx.created_at)}</td>
       </tr>
     `);
             });

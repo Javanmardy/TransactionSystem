@@ -14,13 +14,33 @@
         <div class="container mx-auto flex justify-between items-center px-4 py-4">
             <h1 class="text-xl font-bold">Admin Panel</h1>
             <div class="space-x-4">
-                <a href="admin.html" class="hover:underline">Dashboard</a>
+                <span class="hover:underline font-semibold">Dashboard</span>
                 <button id="logoutBtn" class="bg-white/20 px-3 py-1 rounded hover:bg-white/30">Logout</button>
             </div>
         </div>
     </nav>
 
     <main class="flex-grow container mx-auto p-4 space-y-10">
+        <!-- Admin Summary cards -->
+        <div id="adminSummary" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Total&nbsp;Transactions</h2>
+                <p id="adminTotalTx" class="text-3xl font-bold">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Success</h2>
+                <p id="adminSuccessTx" class="text-3xl font-bold text-green-600">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Failed</h2>
+                <p id="adminFailedTx" class="text-3xl font-bold text-red-600">0</p>
+            </div>
+            <div class="bg-white shadow rounded p-5">
+                <h2 class="text-gray-600">Total&nbsp;Amount</h2>
+                <p id="adminTotalAmount" class="text-3xl font-bold text-blue-600">0</p>
+            </div>
+        </div>
+
 
         <!-- Batch Processing -->
         <section class="bg-white p-6 rounded-lg shadow space-y-4">
@@ -55,10 +75,20 @@
 
         <!-- Transactions -->
         <section class="bg-white p-6 rounded-lg shadow">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
-                <h2 class="text-xl font-bold">All Transactions</h2>
-                <input type="search" id="txSearch" placeholder="Search user/amount/status/date..."
-                    class="border rounded px-3 py-2 w-full sm:w-60">
+            <h2 class="text-xl font-bold mb-4">All Transactions</h2>
+            <div class="grid sm:grid-cols-4 gap-4 items-end mb-4">
+                <div>
+                    <label for="startDate" class="block text-sm text-gray-600 mb-1">From</label>
+                    <input type="date" id="startDate" class="border rounded px-3 py-2 w-full" />
+                </div>
+                <div>
+                    <label for="endDate" class="block text-sm text-gray-600 mb-1">To</label>
+                    <input type="date" id="endDate" class="border rounded px-3 py-2 w-full" />
+                </div>
+                <button id="filterBtn"
+                    class="bg-blue-600 text-white rounded px-6 py-2 hover:bg-blue-700 transition mt-6">Apply Filter</button>
+                <button id="exportBtn"
+                    class="bg-green-600 text-white rounded px-6 py-2 hover:bg-green-700 transition mt-6">Export CSV</button>
             </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
@@ -82,6 +112,8 @@
     </footer>
 
     <script>
+
+
         const token = localStorage.getItem('token');
         if (!token) location.href = 'index.html';
         const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
@@ -89,6 +121,61 @@
         let users = [];
         let transactions = [];
         let allUsers = [];
+        let allAdminTx = [];
+        let viewAdminTx = [];
+        const fmt = ts => isNaN(new Date(ts)) ? "-" : new Date(ts).toLocaleString();
+
+        async function loadTxs() {
+            const res = await fetch('/report/all', { headers });
+            allAdminTx = await res.json();
+            applyAdminTxFilter();
+        }
+        function applyAdminTxFilter() {
+            const s = document.getElementById("startDate").value;
+            const e = document.getElementById("endDate").value;
+
+            viewAdminTx = allAdminTx.filter(tx => {
+                const d = new Date(tx.created_at || tx.date);
+                return (!s || d >= new Date(s)) && (!e || d <= new Date(e + "T23:59:59"));
+            });
+
+            renderTxTable();
+        }
+        function renderTxTable() {
+            const body = document.getElementById('adminTxBody');
+            body.innerHTML = "";
+            viewAdminTx.forEach(t => {
+                body.insertAdjacentHTML("beforeend", `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-2 px-3 text-center">${t.id}</td>
+          <td class="py-2 px-3 text-center">${t.user_id}</td>
+          <td class="py-2 px-3 text-center">${t.amount}</td>
+          <td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">${t.status}</td>
+          <td class="py-2 px-3 text-center">${t.created_at ? fmt(t.created_at) : ''}</td>
+        </tr>
+      `);
+            });
+        }
+
+        // Export CSV
+        document.getElementById("exportBtn").onclick = () => downloadAdminCSV(viewAdminTx);
+        function downloadAdminCSV(rows) {
+            if (!rows.length) { alert("nothing to export"); return; }
+            const head = ["ID", "User", "Amount", "Status", "Date"];
+            const csv = [head.join(",")].concat(
+                rows.map(r => [r.id, r.user_id, r.amount, r.status, fmt(r.created_at)].join(","))
+            ).join("\n");
+            const blob = new Blob([csv], { type: "text/csv" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "transactions.csv";
+            a.click();
+            URL.revokeObjectURL(a.href);
+        }
+
+        // Filter events
+        document.getElementById("filterBtn").onclick = applyAdminTxFilter;
+
 
         const loadUsers = async () => {
             const res = await fetch('/users', { headers });
@@ -131,33 +218,28 @@
         }
 
 
-        // Load and render Transactions with filter
-        async function loadTxs() {
-            const res = await fetch('/report/all', { headers });
-            transactions = await res.json();
-            renderTxTable();
+
+        async function loadAdminSummary() {
+            const res = await fetch('/report/summary', { headers });
+            if (!res.ok) {
+                setAdminSummary(0, 0, 0, 0);
+                return;
+            }
+            const data = await res.json();
+            setAdminSummary(
+                data.TotalCount || 0,
+                data.SuccessCount || 0,
+                data.FailedCount || 0,
+                data.TotalAmount || 0
+            );
         }
 
-        function renderTxTable() {
-            const q = document.getElementById('txSearch').value.toLowerCase();
-            const filtered = transactions.filter(t =>
-                ("" + t.user_id).includes(q) ||
-                ("" + t.amount).includes(q) ||
-                (t.status ?? "").toLowerCase().includes(q) ||
-                (t.created_at ? new Date(t.created_at).toLocaleString().toLowerCase().includes(q) : false)
-            );
-            const body = document.getElementById('adminTxBody');
-            body.innerHTML = filtered.map(t => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="py-2 px-3 text-center">${t.id}</td>
-          <td class="py-2 px-3 text-center">${t.user_id}</td>
-          <td class="py-2 px-3 text-center">${t.amount}</td>
-<td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">
-  ${t.status}
-</td>
-          <td class="py-2 px-3 text-center">${t.created_at ? new Date(t.created_at).toLocaleString() : ''}</td>
-        </tr>
-      `).join('');
+
+        function setAdminSummary(total, success, failed, amount) {
+            document.getElementById('adminTotalTx').textContent = total;
+            document.getElementById('adminSuccessTx').textContent = success;
+            document.getElementById('adminFailedTx').textContent = failed;
+            document.getElementById('adminTotalAmount').textContent = amount;
         }
 
         // Batch
@@ -172,13 +254,16 @@
         };
 
         // Filter event listeners
+        document.getElementById('filterBtn').onclick = applyAdminTxFilter;
+        document.getElementById('exportBtn').onclick = () => downloadAdminCSV(viewAdminTx);
         document.getElementById('userSearch').oninput = renderUserTable;
-        document.getElementById('txSearch').oninput = renderTxTable;
-
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); location.href = 'index.html'; };
 
-        // Initial load
-        loadUsers(); loadTxs();
+        loadUsers();
+        loadTxs();
+        loadAdminSummary();
+
+
     </script>
 </body>
 
