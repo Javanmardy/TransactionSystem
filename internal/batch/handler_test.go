@@ -15,7 +15,7 @@ import (
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("mysql", "root:yourpassword@tcp(localhost:3306)/transaction_db_test")
+	db, err := sql.Open("mysql", "root:n61224n61224@tcp(localhost:3306)/transaction_db")
 	if err != nil {
 		t.Fatalf("failed to connect db: %v", err)
 	}
@@ -88,5 +88,62 @@ func TestProcessBatch_ForbiddenForNonAdmin_DB(t *testing.T) {
 
 	if rr.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d", rr.Code)
+	}
+}
+
+func TestProcessBatch_InvalidData_DB(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	repo := transaction.NewDBRepo(db)
+	svc := transaction.NewService(repo)
+	h := NewHandler(svc)
+
+	bodyObj := BatchRequest{
+		Transactions: []transaction.Transaction{
+			{UserID: 3, Amount: -10, Status: "success"},
+			{UserID: 3, Amount: 200, Status: "unknown"},
+		},
+	}
+	body, _ := json.Marshal(bodyObj)
+
+	req := httptest.NewRequest(http.MethodPost, "/batch", bytes.NewReader(body))
+	ctx := context.WithValue(req.Context(), auth.RoleKey, "admin")
+	ctx = context.WithValue(ctx, auth.UserIDKey, 1)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	h.ProcessBatch(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var res []BatchResult
+	if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(res) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(res))
+	}
+	for _, r := range res {
+		if r.Status != "failed" || r.Error == "" {
+			t.Errorf("expected failed status and error, got %+v", r)
+		}
+	}
+}
+
+func TestProcessBatch_BadRequest_DB(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	repo := transaction.NewDBRepo(db)
+	svc := transaction.NewService(repo)
+	h := NewHandler(svc)
+
+	req := httptest.NewRequest(http.MethodPost, "/batch", bytes.NewReader([]byte("not-json")))
+	ctx := context.WithValue(req.Context(), auth.RoleKey, "admin")
+	ctx = context.WithValue(ctx, auth.UserIDKey, 1)
+	req = req.WithContext(ctx)
+	rr := httptest.NewRecorder()
+	h.ProcessBatch(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rr.Code)
 	}
 }
