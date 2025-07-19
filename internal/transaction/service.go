@@ -25,6 +25,7 @@ type Service interface {
 	GetTransactionByID(id int) *Transaction
 	ListUserTransactions(userID int) []Transaction
 	AddTransaction(tx *Transaction) error
+	AllTransactions() ([]Transaction, error)
 }
 
 type service struct {
@@ -42,4 +43,8 @@ func (s *service) ListUserTransactions(userID int) []Transaction {
 
 func (s *service) AddTransaction(tx *Transaction) error {
 	return s.repo.AddTransaction(tx)
+}
+
+func (s *service) AllTransactions() ([]Transaction, error) {
+	return s.repo.ListAll()
 }

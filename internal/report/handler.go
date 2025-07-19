@@ -27,9 +27,16 @@ func (h *Handler) UserReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AllReports(w http.ResponseWriter, r *http.Request) {
-	role, _ := r.Context().Value("role").(string)
+	role, _ := r.Context().Value(auth.RoleKey).(string)
 	if role != "admin" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
+	txs, err := h.svc.AllTransactions()
+	if err != nil {
+		http.Error(w, "failed to fetch transactions", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(txs)
 }

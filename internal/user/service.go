@@ -10,6 +10,7 @@ type Service interface {
 	GetUserByID(id int) *User
 	GetUserByUsername(username string) *User
 	AddUser(user *User) error
+	ListAllUsers() ([]*User, error)
 }
 
 type mysqlService struct {
@@ -49,4 +50,21 @@ func (s *mysqlService) AddUser(user *User) error {
 	id, _ := res.LastInsertId()
 	user.ID = int(id)
 	return nil
+}
+func (s *mysqlService) ListAllUsers() ([]*User, error) {
+	rows, err := s.db.Query("SELECT id, username, password, role, email FROM users")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var users []*User
+	for rows.Next() {
+		var u User
+		err := rows.Scan(&u.ID, &u.Username, &u.Password, &u.Role, &u.Email)
+		if err != nil {
+			continue
+		}
+		users = append(users, &u)
+	}
+	return users, nil
 }

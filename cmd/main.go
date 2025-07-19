@@ -49,6 +49,8 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	userHandler := user.NewHandler(userService)
+	http.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(userHandler.ListUsers)))
 
 	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
 	http.Handle("/report/all", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AllReports)))

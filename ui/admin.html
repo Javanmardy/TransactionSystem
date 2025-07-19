@@ -1,4 +1,3 @@
-<!-- admin.html -->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -10,7 +9,6 @@
 </head>
 
 <body class="bg-gray-50 min-h-screen flex flex-col">
-
     <!-- nav -->
     <nav class="bg-blue-600 text-white">
         <div class="container mx-auto flex justify-between items-center px-4 py-4">
@@ -24,17 +22,30 @@
 
     <main class="flex-grow container mx-auto p-4 space-y-10">
 
+        <!-- Batch Processing -->
+        <section class="bg-white p-6 rounded-lg shadow space-y-4">
+            <h2 class="text-xl font-bold">Batch Processing</h2>
+            <textarea id="batchJSON" rows="6" class="w-full border p-2 rounded"
+                placeholder='[ { "user_id": 1, "amount": 500, "status": "success" } ]'></textarea>
+            <button id="batchBtn" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Submit
+                Batch</button>
+        </section>
+
         <!-- Users -->
         <section class="bg-white p-6 rounded-lg shadow">
-            <h2 class="text-xl font-bold mb-4">All Users</h2>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+                <h2 class="text-xl font-bold">All Users</h2>
+                <input type="search" id="userSearch" placeholder="Search username/email/role..."
+                    class="border rounded px-3 py-2 w-full sm:w-60">
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead>
                         <tr class="border-b bg-gray-50">
-                            <th class="py-2 px-3">ID</th>
-                            <th class="py-2 px-3">Username</th>
-                            <th class="py-2 px-3">Email</th>
-                            <th class="py-2 px-3">Role</th>
+                            <th class="py-2 px-3 text-center">ID</th>
+                            <th class="py-2 px-3 text-center">Username</th>
+                            <th class="py-2 px-3 text-center">Email</th>
+                            <th class="py-2 px-3 text-center">Role</th>
                         </tr>
                     </thead>
                     <tbody id="userTableBody"></tbody>
@@ -44,32 +55,26 @@
 
         <!-- Transactions -->
         <section class="bg-white p-6 rounded-lg shadow">
-            <h2 class="text-xl font-bold mb-4">All Transactions</h2>
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+                <h2 class="text-xl font-bold">All Transactions</h2>
+                <input type="search" id="txSearch" placeholder="Search user/amount/status/date..."
+                    class="border rounded px-3 py-2 w-full sm:w-60">
+            </div>
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
                     <thead>
                         <tr class="border-b bg-gray-50">
-                            <th class="py-2 px-3">ID</th>
-                            <th class="py-2 px-3">User</th>
-                            <th class="py-2 px-3">Amount</th>
-                            <th class="py-2 px-3">Status</th>
-                            <th class="py-2 px-3">Date</th>
+                            <th class="py-2 px-3 text-center">ID</th>
+                            <th class="py-2 px-3 text-center">User</th>
+                            <th class="py-2 px-3 text-center">Amount</th>
+                            <th class="py-2 px-3 text-center">Status</th>
+                            <th class="py-2 px-3 text-center">Date</th>
                         </tr>
                     </thead>
                     <tbody id="adminTxBody"></tbody>
                 </table>
             </div>
         </section>
-
-        <!-- Batch -->
-        <section class="bg-white p-6 rounded-lg shadow space-y-4">
-            <h2 class="text-xl font-bold">Batch Processing</h2>
-            <textarea id="batchJSON" rows="6" class="w-full border p-2 rounded"
-                placeholder='[ { "user_id": 1, "amount": 500, "status": "success" } ]'></textarea>
-            <button id="batchBtn" class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">Submit
-                Batch</button>
-        </section>
-
     </main>
 
     <footer class="bg-gray-100 py-4">
@@ -79,34 +84,83 @@
     <script>
         const token = localStorage.getItem('token');
         if (!token) location.href = 'index.html';
-
         const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+
+        let users = [];
+        let transactions = [];
+        let allUsers = [];
 
         const loadUsers = async () => {
             const res = await fetch('/users', { headers });
-            const users = await res.json();
+            let raw = await res.json();
+            allUsers = Array.isArray(raw) ? raw.map(normalizeUser) : [];
+            renderUserTable(allUsers);
+        };
+
+
+        function renderUserTable(list) {
             const body = document.getElementById('userTableBody');
-            body.innerHTML = users.map(u => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="py-2 px-3">${u.id}</td><td class="py-2 px-3">${u.username}</td>
-          <td class="py-2 px-3">${u.email}</td><td class="py-2 px-3">${u.role}</td>
-        </tr>`).join('');
-        };
+            body.innerHTML = list.map(u => `
+    <tr class="border-b hover:bg-gray-50">
+      <td class="py-2 px-3 text-center">${u.id}</td>
+      <td class="py-2 px-3 text-center">${u.username}</td>
+      <td class="py-2 px-3 text-center">${u.email}</td>
+      <td class="py-2 px-3 text-center">${u.role}</td>
+    </tr>
+  `).join('');
+        }
 
-        const loadTxs = async () => {
+        document.getElementById('userSearch').addEventListener('input', e => {
+            const q = e.target.value.toLowerCase();
+            const filtered = allUsers.filter(u =>
+                `${u.username} ${u.email} ${u.role}`.toLowerCase().includes(q)
+            );
+            renderUserTable(filtered);
+        });
+
+
+
+
+        function normalizeUser(u) {
+            return {
+                id: u.id ?? u.ID ?? "",
+                username: u.username ?? u.Username ?? "",
+                email: u.email ?? u.Email ?? "",
+                role: u.role ?? u.Role ?? "",
+            };
+        }
+
+
+        // Load and render Transactions with filter
+        async function loadTxs() {
             const res = await fetch('/report/all', { headers });
-            const list = await res.json();
-            const body = document.getElementById('adminTxBody');
-            body.innerHTML = list.map(t => `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="py-2 px-3">${t.id}</td>
-          <td class="py-2 px-3">${t.user_id}</td>
-          <td class="py-2 px-3">${t.amount}</td>
-          <td class="py-2 px-3 ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">${t.status}</td>
-          <td class="py-2 px-3">${new Date(t.created_at || Date.now()).toLocaleString()}</td>
-        </tr>`).join('');
-        };
+            transactions = await res.json();
+            renderTxTable();
+        }
 
+        function renderTxTable() {
+            const q = document.getElementById('txSearch').value.toLowerCase();
+            const filtered = transactions.filter(t =>
+                ("" + t.user_id).includes(q) ||
+                ("" + t.amount).includes(q) ||
+                (t.status ?? "").toLowerCase().includes(q) ||
+                (t.created_at ? new Date(t.created_at).toLocaleString().toLowerCase().includes(q) : false)
+            );
+            const body = document.getElementById('adminTxBody');
+            body.innerHTML = filtered.map(t => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-2 px-3 text-center">${t.id}</td>
+          <td class="py-2 px-3 text-center">${t.user_id}</td>
+          <td class="py-2 px-3 text-center">${t.amount}</td>
+<td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">
+  ${t.status}
+</td>
+          <td class="py-2 px-3 text-center">${t.created_at ? new Date(t.created_at).toLocaleString() : ''}</td>
+        </tr>
+      `).join('');
+        }
+
+        // Batch
         document.getElementById('batchBtn').onclick = async () => {
             try {
                 const payload = JSON.parse(document.getElementById('batchJSON').value);
@@ -117,8 +171,13 @@
             } catch (e) { alert('Invalid JSON or server error'); }
         };
 
+        // Filter event listeners
+        document.getElementById('userSearch').oninput = renderUserTable;
+        document.getElementById('txSearch').oninput = renderTxTable;
+
         document.getElementById('logoutBtn').onclick = () => { localStorage.clear(); location.href = 'index.html'; };
 
+        // Initial load
         loadUsers(); loadTxs();
     </script>
 </body>

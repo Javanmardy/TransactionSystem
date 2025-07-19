@@ -16,6 +16,7 @@ type Report struct {
 
 type Service interface {
 	UserReport(userID int) Report
+	AllTransactions() ([]transaction.Transaction, error)
 }
 
 type service struct {
@@ -44,4 +45,7 @@ func (s *service) UserReport(userID int) Report {
 		rep.SuccessRate = float64(rep.SuccessCount) / float64(rep.TotalCount)
 	}
 	return rep
+}
+func (s *service) AllTransactions() ([]transaction.Transaction, error) {
+	return s.txService.AllTransactions()
 }

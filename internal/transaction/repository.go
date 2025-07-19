@@ -12,6 +12,7 @@ type Repository interface {
 	ListByUser(userID int) ([]Transaction, error)
 	AddTransaction(tx *Transaction) error
 	DeleteTransaction(id int) error
+	ListAll() ([]Transaction, error)
 }
 
 type DBRepo struct {
@@ -93,4 +94,21 @@ func (r *DBRepo) AddTransaction(tx *Transaction) error {
 func (r *DBRepo) DeleteTransaction(id int) error {
 	_, err := r.db.Exec("DELETE FROM transactions WHERE id = ?", id)
 	return err
+}
+
+func (r *DBRepo) ListAll() ([]Transaction, error) {
+	rows, err := r.db.Query("SELECT id,user_id,amount,status,created_at FROM transactions")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var txs []Transaction
+	for rows.Next() {
+		var tx Transaction
+		if err := rows.Scan(&tx.ID, &tx.UserID, &tx.Amount, &tx.Status, &tx.CreatedAt); err == nil {
+			txs = append(txs, tx)
+		}
+	}
+	return txs, nil
 }
