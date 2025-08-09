@@ -58,5 +58,4 @@ func (h *Handler) AddTransactionHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) UserTransactions(w http.ResponseWriter, r *http.Request) {
-	// TODO: implement this handler or remove if not needed
 }
