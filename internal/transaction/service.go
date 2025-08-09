@@ -42,7 +42,14 @@ func (s *service) ListUserTransactions(userID int) []Transaction {
 }
 
 func (s *service) AddTransaction(tx *Transaction) error {
-	return s.repo.AddTransaction(tx)
+	if err := s.repo.AddTransaction(tx); err != nil {
+		return err
+	}
+	cm := cache.GetManager()
+	b, _ := json.Marshal(tx)
+	_ = cm.SetTransaction(tx.ID, string(b))
+	_ = cm.PushRecent(tx.UserID, string(b), 20)
+	return nil
 }
 
 func (s *service) AllTransactions() ([]Transaction, error) {

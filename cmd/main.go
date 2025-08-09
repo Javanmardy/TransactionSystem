@@ -2,8 +2,11 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"TransactionSystem/internal/auth"
 	"TransactionSystem/internal/batch"
@@ -52,10 +55,28 @@ func main() {
 	userHandler := user.NewHandler(userService)
 	http.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(userHandler.ListUsers)))
 
-	http.Handle("/batch", auth.AuthMiddleware(http.HandlerFunc(batchHandler.ProcessBatch)))
+	http.Handle("/batch", auth.AuthMiddleware(
+		auth.RoleRequired("admin", http.HandlerFunc(batchHandler.ProcessBatch)),
+	))
+
 	http.Handle("/report/all", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AllReports)))
 	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
 	http.Handle("/report/summary", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AdminReport)))
+	http.Handle("/tx/", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		idStr := strings.TrimPrefix(r.URL.Path, "/tx/")
+		id, _ := strconv.Atoi(idStr)
+		if id <= 0 {
+			http.Error(w, "bad id", http.StatusBadRequest)
+			return
+		}
+		tx := txService.GetTransactionByID(id)
+		if tx == nil {
+			http.Error(w, "not found", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(tx)
+	})))
 
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))

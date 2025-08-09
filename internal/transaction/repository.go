@@ -2,8 +2,6 @@ package transaction
 
 import (
 	"database/sql"
-	"log"
-	"time"
 )
 
 type Repository interface {
@@ -70,25 +68,11 @@ func (r *DBRepo) AddTransaction(tx *Transaction) error {
 	id, _ := result.LastInsertId()
 	tx.ID = int(id)
 
-	var createdAtStr string
 	row := r.db.QueryRow("SELECT created_at FROM transactions WHERE id = ?", tx.ID)
-	err = row.Scan(&createdAtStr)
-	if err != nil {
-		log.Println("Failed to fetch created_at:", err)
-	} else {
-		t, err := time.Parse("2006-01-02 15:04:05", createdAtStr)
-		if err != nil {
-			log.Println("Failed to parse created_at:", err, createdAtStr)
-		} else {
-			tx.CreatedAt = t
-		}
+	if err := row.Scan(&tx.CreatedAt); err != nil {
+		return nil
 	}
-	if err != nil {
-		log.Println("Failed to fetch created_at:", err)
-	}
-
 	return nil
-
 }
 
 func (r *DBRepo) DeleteTransaction(id int) error {
