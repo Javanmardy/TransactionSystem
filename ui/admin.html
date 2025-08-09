@@ -95,7 +95,8 @@
                     <thead>
                         <tr class="border-b bg-gray-50">
                             <th class="py-2 px-3 text-center">ID</th>
-                            <th class="py-2 px-3 text-center">User</th>
+                            <th class="py-2 px-3 text-center">From User ID</th>
+                            <th class="py-2 px-3 text-center">To User ID</th>
                             <th class="py-2 px-3 text-center">Amount</th>
                             <th class="py-2 px-3 text-center">Status</th>
                             <th class="py-2 px-3 text-center">Date</th>
@@ -146,14 +147,15 @@
             body.innerHTML = "";
             viewAdminTx.forEach(t => {
                 body.insertAdjacentHTML("beforeend", `
-        <tr class="border-b hover:bg-gray-50">
-          <td class="py-2 px-3 text-center">${t.id}</td>
-          <td class="py-2 px-3 text-center">${t.user_id}</td>
-          <td class="py-2 px-3 text-center">${t.amount}</td>
-          <td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">${t.status}</td>
-          <td class="py-2 px-3 text-center">${t.created_at ? fmt(t.created_at) : ''}</td>
-        </tr>
-      `);
+      <tr class="border-b hover:bg-gray-50">
+        <td class="py-2 px-3 text-center">${t.id}</td>
+        <td class="py-2 px-3 text-center">${t.from_user_id} (${t.from_username || '-'})</td>
+        <td class="py-2 px-3 text-center">${t.to_user_id} (${t.to_username || '-'})</td>
+        <td class="py-2 px-3 text-center">${t.amount}</td>
+        <td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">${t.status}</td>
+        <td class="py-2 px-3 text-center">${t.created_at ? fmt(t.created_at) : ''}</td>
+      </tr>
+    `);
             });
         }
 
@@ -161,9 +163,16 @@
         document.getElementById("exportBtn").onclick = () => downloadAdminCSV(viewAdminTx);
         function downloadAdminCSV(rows) {
             if (!rows.length) { alert("nothing to export"); return; }
-            const head = ["ID", "User", "Amount", "Status", "Date"];
+            const head = ["ID", "FromUserID", "ToUserID", "Amount", "Status", "Date"];
             const csv = [head.join(",")].concat(
-                rows.map(r => [r.id, r.user_id, r.amount, r.status, fmt(r.created_at)].join(","))
+                rows.map(r => [
+                    r.id,
+                    r.from_user_id ?? "",
+                    r.to_user_id ?? "",
+                    r.amount,
+                    r.status,
+                    fmt(r.created_at)
+                ].join(","))
             ).join("\n");
             const blob = new Blob([csv], { type: "text/csv" });
             const a = document.createElement("a");

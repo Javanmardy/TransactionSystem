@@ -22,28 +22,29 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+func writeJSON(w http.ResponseWriter, code int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_ = json.NewEncoder(w).Encode(v)
+}
+
 func (h *Handler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid request", http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
 	}
-
 	usr := h.userService.GetUserByUsername(req.Username)
 	if usr == nil || usr.Password != req.Password {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
 		return
 	}
-
 	tokenString, err := GenerateJWT(usr.ID, usr.Username, usr.Role)
 	if err != nil {
-		http.Error(w, "could not generate token", http.StatusInternalServerError)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not generate token"})
 		return
 	}
-
-	resp := LoginResponse{Token: tokenString}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	writeJSON(w, http.StatusOK, LoginResponse{Token: tokenString})
 }
 
 func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
@@ -53,12 +54,12 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Email    string `json:"email"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request", http.StatusBadRequest)
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request"})
 		return
 	}
 	existingUser := h.userService.GetUserByUsername(req.Username)
 	if existingUser != nil {
-		http.Error(w, "Username already exists", http.StatusConflict)
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "username already exists"})
 		return
 	}
 	newUser := &user.User{
@@ -67,11 +68,9 @@ func (h *Handler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 		Role:     "user",
 		Email:    req.Email,
 	}
-	err := h.userService.AddUser(newUser)
-	if err != nil {
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
+	if err := h.userService.AddUser(newUser); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("User created"))
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "user created"})
 }

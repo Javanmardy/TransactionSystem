@@ -6,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Transaction Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+
 </head>
 
 <body class="bg-gray-50 min-h-screen flex flex-col">
@@ -45,16 +57,35 @@
         <!-- Filters + export -->
 
         <section class="bg-white p-6 rounded-lg shadow space-y-6 mb-6">
-            <h2 class="text-xl font-bold">Add Transaction</h2>
+            <h2 class="text-xl font-bold">Send Money</h2>
 
-            <!-- Add Tx -->
-            <form id="addTxForm" class="grid sm:grid-cols-3 gap-4 items-end">
-                <input id="txAmount" type="number" placeholder="Amount" class="border p-2 rounded w-full" required />
-                <select id="txStatus" class="border p-2 rounded w-full">
-                    <option value="success">success</option>
-                    <option value="failed">failed</option>
-                </select>
-                <button class="bg-blue-600 text-white py-2 rounded hover:bg-blue-700">Add</button>
+            <!-- Send Money -->
+            <form id="sendMoneyForm" class="grid sm:grid-cols-4 gap-4 items-end">
+                <!-- Recipient -->
+                <div class="sm:col-span-2 relative">
+                    <label class="block text-sm text-gray-600 mb-1">Recipient (User ID)</label>
+                    <div class="flex gap-2">
+                        <input id="recipientId" type="number" min="1" class="border p-2 rounded w-full"
+                            placeholder="User ID" required>
+                        <button id="checkRecipientBtn" type="button" class="px-3 rounded border">Check</button>
+                    </div>
+                    <!-- پیام گیرنده در موقعیت مطلق؛ خارج از جریان عادی -->
+                    <p id="recipientInfo" class="absolute left-0 top-full mt-1 text-sm text-gray-500"></p>
+                </div>
+
+                <!-- Amount -->
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Amount</label>
+                    <input id="txAmount" type="number" min="1" step="1" placeholder="Amount"
+                        class="border p-2 rounded w-full" required />
+                </div>
+
+                <!-- Send -->
+                <div class="flex items-end">
+                    <button class="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700">
+                        Send
+                    </button>
+                </div>
             </form>
 
             <!-- Filter -->
@@ -82,7 +113,8 @@
                     <thead>
                         <tr class="border-b">
                             <th class="py-2 px-3 text-center">ID</th>
-                            <th class="py-2 px-3 text-center">User</th>
+                            <th class="py-2 px-3 text-center">From User ID</th>
+                            <th class="py-2 px-3 text-center">To User ID</th>
                             <th class="py-2 px-3 text-center">Amount</th>
                             <th class="py-2 px-3 text-center">Status</th>
                             <th class="py-2 px-3 text-center">Date</th>
@@ -99,26 +131,87 @@
     </footer>
 
     <script>
+        /* ==== auth & headers ==== */
         const token = localStorage.getItem("token");
         if (!token) location.replace("index.html");
-        const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+        const headers = {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${token}`
+        };
 
-        let allTx = [];
-        let viewTx = [];
+        /* ==== state ==== */
+        let allTx = [], viewTx = [];
+        let usersCache = null;
 
-        /* helpers */
+        /* ==== helpers ==== */
         const fmt = ts => isNaN(new Date(ts)) ? "-" : new Date(ts).toLocaleString();
-        const setText = (id, v) => document.getElementById(id).textContent = v;
+        const setTxt = (id, v) => (document.getElementById(id).textContent = v);
 
-        /* ===== fetch once ===== */
+        /* ==== recipient lookup (بدون لو دادن لیست) ==== */
+        async function ensureUsersCache() {
+            if (!usersCache) {
+                const res = await fetch("/users", { headers });
+                usersCache = await res.json();
+            }
+            return usersCache;
+        }
+        async function lookupRecipientName(id) {
+            const list = await ensureUsersCache();
+            const u = Array.isArray(list)
+                ? list.find(x => String((x.id ?? x.ID)) === String(id))
+                : null;
+            // پوشش فیلدهای مختلف
+            return u ? (u.username ?? u.Username ?? u.email ?? u.Email ?? String(u.id ?? u.ID)) : null;
+        }
+        document.getElementById("checkRecipientBtn").onclick = async () => {
+            const id = document.getElementById("recipientId").value.trim();
+            const label = document.getElementById("recipientInfo");
+            if (!id) { label.textContent = ""; return; }
+            const name = await lookupRecipientName(id);
+            if (name) {
+                label.textContent = `Username: ${name}`;
+                label.className = "absolute left-0 top-full mt-1 text-sm text-green-600";
+            } else {
+                label.textContent = "User not found";
+                label.className = "absolute left-0 top-full mt-1 text-sm text-red-600";
+            }
+        };
+
+        /* ==== send money (بدون status) ==== */
+        document.getElementById("sendMoneyForm").onsubmit = async (e) => {
+            e.preventDefault();
+            const toUserId = Number(document.getElementById("recipientId").value);
+            const amount = Number(document.getElementById("txAmount").value);
+            if (!toUserId) { alert("Enter recipient ID"); return; }
+            if (!amount || amount <= 0) { alert("Amount must be positive"); return; }
+
+            const resp = await fetch("/transactions", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ to_user_id: toUserId, amount })
+            });
+
+            if (!resp.ok) {
+                const t = await resp.text();
+                alert(t || "transfer failed");
+                await loadAll();   // چون سرویس روی خطا یک failed ثبت می‌کند
+                return;
+            }
+
+            e.target.reset();
+            document.getElementById("recipientInfo").textContent = "";
+            await loadAll();
+        };
+
+        /* ==== fetch & render ==== */
         async function loadAll() {
             allTx = await fetch("/transactions", { headers }).then(r => r.json());
             applyFilter();
         }
 
         function applyFilter() {
-            const s = document.getElementById("startDate").value;
-            const e = document.getElementById("endDate").value;
+            const s = document.getElementById("startDate")?.value;
+            const e = document.getElementById("endDate")?.value;
 
             viewTx = allTx.filter(tx => {
                 const d = new Date(tx.created_at || tx.date);
@@ -136,7 +229,8 @@
                 body.insertAdjacentHTML("beforeend", `
       <tr>
         <td class="p-3 border-b text-center">${tx.id}</td>
-        <td class="py-2 px-3 text-center">${tx.user_id}</td>
+        <td class="p-3 border-b text-center">${tx.from_user_id ?? '-'}</td>
+        <td class="p-3 border-b text-center">${tx.to_user_id ?? '-'}</td>
         <td class="p-3 border-b text-center">${tx.amount}</td>
         <td class="p-3 border-b text-center ${tx.status === 'success' ? 'text-green-600' : 'text-red-600'}">${tx.status}</td>
         <td class="p-3 border-b text-center">${fmt(tx.created_at)}</td>
@@ -152,35 +246,18 @@
                 if (t.status === 'success') { succ++; bal += Number(t.amount); }
                 else { fail++; }
             });
-            setText("totalTx", tot);
-            setText("successTx", succ);
-            setText("failedTx", fail);
-            setText("currentBal", bal);
+            setTxt("totalTx", tot);
+            setTxt("successTx", succ);
+            setTxt("failedTx", fail);
+            setTxt("currentBal", bal);
         }
 
-        document.getElementById("addTxForm").onsubmit = async e => {
-            e.preventDefault();
-            await fetch("/transactions", {
-                method: "POST", headers, body: JSON.stringify({
-                    amount: +txAmount.value,
-                    status: txStatus.value
-                })
-            });
-            e.target.reset();
-            loadAll();
-        };
-
-        document.getElementById("filterBtn").onclick = applyFilter;
-        document.getElementById("exportBtn").onclick = () => downloadCSV(viewTx);
-
-        document.getElementById("logoutBtn").onclick = () => { localStorage.removeItem("token"); location.replace("index.html"); };
-
-        /* ===== CSV ===== */
+        /* ==== CSV ==== */
         function downloadCSV(rows) {
             if (!rows.length) { alert("nothing to export"); return; }
-            const head = ["ID", "User", "Amount", "Status", "Date"];
+            const head = ["ID", "FromUserID", "ToUserID", "Amount", "Status", "Date"];
             const csv = [head.join(",")].concat(
-                rows.map(r => [r.id, r.user_id, r.amount, r.status, fmt(r.created_at)].join(","))
+                rows.map(r => [r.id, r.from_user_id ?? "", r.to_user_id ?? "", r.amount, r.status, fmt(r.created_at)].join(","))
             ).join("\n");
             const blob = new Blob([csv], { type: "text/csv" });
             const a = document.createElement("a");
@@ -190,7 +267,15 @@
             URL.revokeObjectURL(a.href);
         }
 
-        /* init */
+
+        /* ==== events ==== */
+        document.getElementById("filterBtn").onclick = applyFilter;
+        document.getElementById("exportBtn").onclick = () => downloadCSV(viewTx);
+        document.getElementById("logoutBtn").onclick = () => {
+            localStorage.removeItem("token"); location.replace("index.html");
+        };
+
+        /* ==== init ==== */
         loadAll();
     </script>
 

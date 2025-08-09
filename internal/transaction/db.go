@@ -15,11 +15,13 @@ func InitDB(user, password, host, dbname string) (*sql.DB, error) {
 	}
 	schema := `
 CREATE TABLE IF NOT EXISTS transactions (
-	id INT AUTO_INCREMENT PRIMARY KEY,
-	user_id INT,
-	amount DOUBLE,
-	status VARCHAR(20),
-	created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT,
+    from_user_id INT,
+    to_user_id INT,
+    amount DOUBLE,
+    status VARCHAR(20),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 `
 	_, err = db.Exec(schema)
