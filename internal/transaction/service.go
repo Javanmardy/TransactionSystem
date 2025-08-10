@@ -3,6 +3,7 @@ package transaction
 import (
 	"TransactionSystem/internal/cache"
 	"encoding/json"
+	"fmt"
 )
 
 func (s *service) GetTransactionByID(id int) *Transaction {
@@ -26,6 +27,43 @@ type Service interface {
 	ListUserTransactions(userID int) []Transaction
 	AddTransaction(tx *Transaction) error
 	AllTransactions() ([]Transaction, error)
+	TransferFunds(fromUserID, toUserID int, amount float64, status string) error
+}
+
+func (s *service) TransferFunds(fromUserID, toUserID int, amount float64, status string) error {
+	if amount <= 0 {
+		_ = s.repo.AddTransaction(&Transaction{
+			UserID:     fromUserID,
+			FromUserID: fromUserID,
+			ToUserID:   toUserID,
+			Amount:     0,
+			Status:     "failed",
+		})
+		return fmt.Errorf("amount must be positive")
+	}
+
+	if err := s.repo.TransferFunds(fromUserID, toUserID, amount, status); err != nil {
+		_ = s.repo.AddTransaction(&Transaction{
+			UserID:     fromUserID,
+			FromUserID: fromUserID,
+			ToUserID:   toUserID,
+			Amount:     0,
+			Status:     "failed",
+		})
+		return err
+	}
+
+	cm := cache.GetManager()
+	senderTx := &Transaction{UserID: fromUserID, Amount: -amount, Status: status}
+	receiverTx := &Transaction{UserID: toUserID, Amount: amount, Status: status}
+
+	b1, _ := json.Marshal(senderTx)
+	b2, _ := json.Marshal(receiverTx)
+
+	_ = cm.PushRecent(fromUserID, string(b1), 20)
+	_ = cm.PushRecent(toUserID, string(b2), 20)
+
+	return nil
 }
 
 type service struct {

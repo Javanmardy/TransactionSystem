@@ -15,12 +15,17 @@ type mockTxService struct{}
 func (m *mockTxService) GetTransactionByID(id int) *transaction.Transaction  { return nil }
 func (m *mockTxService) AddTransaction(tx *transaction.Transaction) error    { return nil }
 func (m *mockTxService) AllTransactions() ([]transaction.Transaction, error) { return nil, nil }
+func (m *mockTxService) TransferFunds(fromUserID, toUserID int, amount float64, status string) error {
+	return nil
+}
 func (m *mockTxService) ListUserTransactions(userID int) []transaction.Transaction {
 	return []transaction.Transaction{
 		{ID: 1, UserID: userID, Amount: 123, Status: "success"},
 		{ID: 2, UserID: userID, Amount: 456, Status: "failed"},
 	}
 }
+
+var _ transaction.Service = (*mockTxService)(nil)
 
 func TestListUserTransactionsHandler(t *testing.T) {
 	h := transaction.NewHandler(&mockTxService{})

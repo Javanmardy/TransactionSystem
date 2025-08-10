@@ -34,27 +34,36 @@ func (h *Handler) AddTransactionHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req struct {
-		Amount float64 `json:"amount"`
-		Status string  `json:"status"`
+		ToUserID int     `json:"to_user_id"`
+		Amount   float64 `json:"amount"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	tx := &Transaction{
-		UserID: userID,
-		Amount: req.Amount,
-		Status: req.Status,
-	}
-
-	err := h.service.AddTransaction(tx)
-	if err != nil {
-		http.Error(w, "Failed to add transaction", http.StatusInternalServerError)
+	if req.ToUserID == 0 || req.ToUserID == userID {
+		http.Error(w, "Invalid recipient", http.StatusBadRequest)
 		return
 	}
+	if req.Amount <= 0 {
+		http.Error(w, "amount must be positive", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.TransferFunds(userID, req.ToUserID, req.Amount, "success"); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(tx)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"message":   "transfer success",
+		"from_user": userID,
+		"to_user":   req.ToUserID,
+		"amount":    req.Amount,
+		"status":    "success",
+	})
 }
 
 func (h *Handler) UserTransactions(w http.ResponseWriter, r *http.Request) {

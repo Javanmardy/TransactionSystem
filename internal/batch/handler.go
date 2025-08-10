@@ -33,12 +33,14 @@ func (h *Handler) ProcessBatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorID, _ := r.Context().Value(auth.UserIDKey).(int)
+
 	var req BatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	results := h.processor.Process(req.Transactions, 0)
+	results := h.processor.Process(req.Transactions, actorID)
 	json.NewEncoder(w).Encode(results)
 }
