@@ -32,12 +32,24 @@ type Service interface {
 
 func (s *service) TransferFunds(fromUserID, toUserID int, amount float64, status string) error {
 	if amount <= 0 {
-		_ = s.repo.AddTransaction(&Transaction{UserID: fromUserID, Amount: 0, Status: "failed"})
+		_ = s.repo.AddTransaction(&Transaction{
+			UserID:     fromUserID,
+			FromUserID: fromUserID,
+			ToUserID:   toUserID,
+			Amount:     0,
+			Status:     "failed",
+		})
 		return fmt.Errorf("amount must be positive")
 	}
 
 	if err := s.repo.TransferFunds(fromUserID, toUserID, amount, status); err != nil {
-		_ = s.repo.AddTransaction(&Transaction{UserID: fromUserID, Amount: 0, Status: "failed"})
+		_ = s.repo.AddTransaction(&Transaction{
+			UserID:     fromUserID,
+			FromUserID: fromUserID,
+			ToUserID:   toUserID,
+			Amount:     0,
+			Status:     "failed",
+		})
 		return err
 	}
 
