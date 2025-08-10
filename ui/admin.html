@@ -149,8 +149,12 @@
                 body.insertAdjacentHTML("beforeend", `
       <tr class="border-b hover:bg-gray-50">
         <td class="py-2 px-3 text-center">${t.id}</td>
-        <td class="py-2 px-3 text-center">${t.from_user_id} (${t.from_username || '-'})</td>
-        <td class="py-2 px-3 text-center">${t.to_user_id} (${t.to_username || '-'})</td>
+        <td class="py-2 px-3 text-center">
+            ${t.from_user_id}${t.from_username ? ' (' + t.from_username + ')' : ''}
+        </td>
+        <td class="py-2 px-3 text-center">
+            ${t.to_user_id}${t.to_username ? ' (' + t.to_username + ')' : ''}
+        </td>
         <td class="py-2 px-3 text-center">${t.amount}</td>
         <td class="py-2 px-3 text-center ${t.status === 'success' ? 'text-green-600' : 'text-red-600'}">${t.status}</td>
         <td class="py-2 px-3 text-center">${t.created_at ? fmt(t.created_at) : ''}</td>

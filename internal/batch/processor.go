@@ -22,10 +22,11 @@ type BatchResult struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func (bp *BatchProcessor) Process(txs []transaction.Transaction, userID int) []BatchResult {
+func (bp *BatchProcessor) Process(txs []transaction.Transaction, actorID int) []BatchResult {
 	var results []BatchResult
 	for i := range txs {
 		tx := &txs[i]
+
 		var err error
 		for _, strategy := range bp.strategies {
 			if err = strategy.Validate(tx); err != nil {
@@ -33,20 +34,31 @@ func (bp *BatchProcessor) Process(txs []transaction.Transaction, userID int) []B
 			}
 		}
 		if err != nil {
-			results = append(results, BatchResult{
-				Status: "failed",
-				Error:  err.Error(),
-			})
+			results = append(results, BatchResult{Status: "failed", Error: err.Error()})
 			continue
 		}
-		if userID > 0 {
-			tx.UserID = userID
+
+		if tx.ToUserID == 0 && tx.UserID != 0 {
+			tx.ToUserID = tx.UserID
 		}
-		_ = bp.service.AddTransaction(tx)
-		results = append(results, BatchResult{
-			ID:     tx.ID,
-			Status: "success",
-		})
+		if tx.UserID == 0 && tx.ToUserID != 0 {
+			tx.UserID = tx.ToUserID
+		}
+
+		if actorID > 0 && tx.FromUserID == 0 {
+			tx.FromUserID = actorID
+		}
+
+		if tx.UserID == 0 {
+			results = append(results, BatchResult{Status: "failed", Error: "missing receiver user_id"})
+			continue
+		}
+
+		if err := bp.service.AddTransaction(tx); err != nil {
+			results = append(results, BatchResult{Status: "failed", Error: err.Error()})
+			continue
+		}
+		results = append(results, BatchResult{ID: tx.ID, Status: "success"})
 	}
 	return results
 }
