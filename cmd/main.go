@@ -22,6 +22,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+
 const (
 	simBaseURL   = "http://localhost:8080"
 	simUsers     = 60   // چند کاربر بسازد
@@ -109,7 +110,6 @@ func main() {
 
 	// ---- Simulation Goroutine ----
 	go runSimulation()
-
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

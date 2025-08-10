@@ -1,9 +1,10 @@
 package transaction
 
 import (
-	"database/sql"
-	"fmt"
+    "database/sql"
+    "fmt"
 )
+
 
 type Repository interface {
 	Create(t *Transaction) error
@@ -98,6 +99,7 @@ func (r *DBRepo) AddTransaction(txn *Transaction) error {
 	id, _ := result.LastInsertId()
 	txn.ID = int(id)
 
+
 	row := r.db.QueryRow("SELECT created_at FROM transactions WHERE id = ?", txn.ID)
 	_ = row.Scan(&txn.CreatedAt)
 	return nil
@@ -152,6 +154,12 @@ func (r *DBRepo) TransferFunds(fromUserID, toUserID int, amount float64, status 
 	); err != nil {
 		return err
 	}
+	row := r.db.QueryRow("SELECT created_at FROM transactions WHERE id = ?", tx.ID)
+	if err := row.Scan(&tx.CreatedAt); err != nil {
+		return nil
+	}
+	return nil
+}
 
 	if _, err = tx.Exec(
 		"INSERT INTO transactions (user_id, from_user_id, to_user_id, amount, status) VALUES (?, ?, ?, ?, ?)",
