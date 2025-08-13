@@ -4,6 +4,8 @@ import (
 	"TransactionSystem/internal/cache"
 	"encoding/json"
 	"fmt"
+	"log"
+	"time"
 )
 
 func (s *service) GetTransactionByID(id int) *Transaction {
@@ -54,12 +56,14 @@ func (s *service) TransferFunds(fromUserID, toUserID int, amount float64, status
 	}
 
 	cm := cache.GetManager()
+	now := time.Now()
 	senderTx := &Transaction{
 		UserID:     fromUserID,
 		FromUserID: fromUserID,
 		ToUserID:   toUserID,
 		Amount:     -amount,
 		Status:     status,
+		CreatedAt:  now,
 	}
 	receiverTx := &Transaction{
 		UserID:     toUserID,
@@ -67,13 +71,17 @@ func (s *service) TransferFunds(fromUserID, toUserID int, amount float64, status
 		ToUserID:   toUserID,
 		Amount:     amount,
 		Status:     status,
+		CreatedAt:  now,
 	}
-
 	b1, _ := json.Marshal(senderTx)
 	b2, _ := json.Marshal(receiverTx)
-	_ = cm.PushRecent(fromUserID, string(b1), 20)
-	_ = cm.PushRecent(toUserID, string(b2), 20)
-
+	log.Printf("[debug] PushRecent from=%d to=%d", fromUserID, toUserID)
+	if err := cm.PushRecent(fromUserID, string(b1), 20); err != nil {
+		log.Printf("[error] pushRecent from-user %d: %v", fromUserID, err)
+	}
+	if err := cm.PushRecent(toUserID, string(b2), 20); err != nil {
+		log.Printf("[error] pushRecent to-user %d: %v", toUserID, err)
+	}
 	return nil
 }
 
