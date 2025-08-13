@@ -2,70 +2,72 @@ package report
 
 import (
 	"TransactionSystem/internal/transaction"
+	"reflect"
 	"testing"
 )
 
-func setupTestDB(t *testing.T) (transaction.Service, *transaction.DBRepo) {
-	db, err := transaction.InitDB("root", "n61224n61224", "localhost:3306", "transaction_db")
-	if err != nil {
-		t.Fatalf("failed to connect to DB: %v", err)
-	}
-	repo := transaction.NewDBRepo(db)
-	txService := transaction.NewService(repo)
-	db.Exec("DELETE FROM transactions")
-	return txService, repo
+type mockTxService struct {
+	userTxs []transaction.Transaction
+	allTxs  []transaction.Transaction
 }
 
-func TestUserReport(t *testing.T) {
-	txService, repo := setupTestDB(t)
-	reportService := NewService(txService)
-
-	tx1 := &transaction.Transaction{UserID: 1, Amount: 1000, Status: "success"}
-	tx2 := &transaction.Transaction{UserID: 1, Amount: 200, Status: "failed"}
-	_ = txService.AddTransaction(tx1)
-	_ = txService.AddTransaction(tx2)
-
-	report := reportService.UserReport(1)
-	if report.TotalCount != 2 {
-		t.Errorf("Expected 2 transactions, got %d", report.TotalCount)
-	}
-	if report.SuccessCount != 1 {
-		t.Errorf("Expected 1 successful transaction, got %d", report.SuccessCount)
-	}
-	if report.FailedCount != 1 {
-		t.Errorf("Expected 1 failed transaction, got %d", report.FailedCount)
-	}
-	if report.SuccessRate != 0.5 {
-		t.Errorf("Expected success rate 0.5, got %f", report.SuccessRate)
-	}
-
-	repo.DeleteTransaction(tx1.ID)
-	repo.DeleteTransaction(tx2.ID)
+func (m *mockTxService) GetTransactionByID(id int) *transaction.Transaction { return nil }
+func (m *mockTxService) ListUserTransactions(userID int) []transaction.Transaction {
+	return m.userTxs
+}
+func (m *mockTxService) AddTransaction(tx *transaction.Transaction) error { return nil }
+func (m *mockTxService) AllTransactions() ([]transaction.Transaction, error) {
+	return m.allTxs, nil
+}
+func (m *mockTxService) TransferFunds(fromUserID, toUserID int, amount float64, status string) error {
+	return nil
 }
 
-func TestAllReport(t *testing.T) {
-	txService, repo := setupTestDB(t)
-	reportService := NewService(txService)
+func TestUserReport_Calculations(t *testing.T) {
+	txSvc := &mockTxService{
+		userTxs: []transaction.Transaction{
+			{Amount: 100, Status: "success"},
+			{Amount: 50, Status: "failed"},
+		},
+	}
+	svc := NewService(txSvc)
 
-	_ = txService.AddTransaction(&transaction.Transaction{UserID: 2, Amount: 400, Status: "success"})
-	_ = txService.AddTransaction(&transaction.Transaction{UserID: 3, Amount: 800, Status: "failed"})
+	got := svc.UserReport(1)
+	want := Report{
+		TotalCount:    2,
+		SuccessCount:  1,
+		FailedCount:   1,
+		TotalAmount:   150,
+		SuccessAmount: 100,
+		FailedAmount:  50,
+		SuccessRate:   0.5,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("UserReport mismatch\nwant: %+v\ngot:  %+v", want, got)
+	}
+}
 
-	report := reportService.AllReport()
-	if report.TotalCount < 2 {
-		t.Errorf("Expected at least 2 transactions, got %d", report.TotalCount)
+func TestAllReport_Calculations(t *testing.T) {
+	txSvc := &mockTxService{
+		allTxs: []transaction.Transaction{
+			{Amount: 20, Status: "success"},
+			{Amount: 30, Status: "failed"},
+			{Amount: 50, Status: "success"},
+		},
 	}
-	if report.SuccessCount != 1 {
-		t.Errorf("Expected 1 success, got %d", report.SuccessCount)
-	}
-	if report.FailedCount != 1 {
-		t.Errorf("Expected 1 failed, got %d", report.FailedCount)
-	}
-	if report.TotalAmount < 1200 {
-		t.Errorf("Expected total amount at least 1200, got %f", report.TotalAmount)
-	}
+	svc := NewService(txSvc)
 
-	all, _ := txService.AllTransactions()
-	for _, tx := range all {
-		repo.DeleteTransaction(tx.ID)
+	got := svc.AllReport()
+	want := Report{
+		TotalCount:    3,
+		SuccessCount:  2,
+		FailedCount:   1,
+		TotalAmount:   100,
+		SuccessAmount: 70,
+		FailedAmount:  30,
+		SuccessRate:   2.0 / 3.0,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AllReport mismatch\nwant: %+v\ngot:  %+v", want, got)
 	}
 }

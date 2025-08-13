@@ -2,73 +2,131 @@ package transaction_test
 
 import (
 	"TransactionSystem/internal/transaction"
+	"errors"
+	"reflect"
 	"testing"
 )
 
-func setupDB(t *testing.T) *transaction.DBRepo {
-	db, err := transaction.InitDB("root", "n61224n61224", "localhost:3306", "transaction_db")
-	if err != nil {
-		t.Fatalf("Failed to connect to DB: %v", err)
+type mockRepo struct {
+	lastTransfer struct {
+		fromUserID int
+		toUserID   int
+		amount     float64
+		status     string
+		called     bool
 	}
-	db.Exec("DELETE FROM transactions")
-	return transaction.NewDBRepo(db)
+	transferErr error
+
+	addedTxs []transaction.Transaction
+
+	listByUserRet []transaction.Transaction
+	listAllRet    []transaction.Transaction
+	findByIDRet   *transaction.Transaction
 }
 
-func TestAddAndGetTransaction(t *testing.T) {
-	repo := setupDB(t)
-	svc := transaction.NewService(repo)
+func (m *mockRepo) Create(t *transaction.Transaction) error { return nil }
 
-	tx := &transaction.Transaction{
-		UserID: 1,
-		Amount: 3500,
-		Status: "success",
-	}
-
-	err := svc.AddTransaction(tx)
-	if err != nil {
-		t.Fatalf("Failed to add transaction: %v", err)
-	}
-
-	got := svc.GetTransactionByID(tx.ID)
-	if got == nil || got.Amount != tx.Amount {
-		t.Errorf("Expected amount %v, got %+v", tx.Amount, got)
-	}
-
-	repo.DeleteTransaction(tx.ID)
+func (m *mockRepo) FindByID(id int) (*transaction.Transaction, error) {
+	return m.findByIDRet, nil
 }
 
-func TestListUserTransactions(t *testing.T) {
-	repo := setupDB(t)
+func (m *mockRepo) ListByUser(userID int) ([]transaction.Transaction, error) {
+	return m.listByUserRet, nil
+}
+
+func (m *mockRepo) AddTransaction(tx *transaction.Transaction) error {
+	cp := *tx
+	m.addedTxs = append(m.addedTxs, cp)
+	return nil
+}
+
+func (m *mockRepo) DeleteTransaction(id int) error { return nil }
+
+func (m *mockRepo) ListAll() ([]transaction.Transaction, error) {
+	return m.listAllRet, nil
+}
+
+func (m *mockRepo) TransferFunds(fromUserID, toUserID int, amount float64, status string) error {
+	m.lastTransfer.called = true
+	m.lastTransfer.fromUserID = fromUserID
+	m.lastTransfer.toUserID = toUserID
+	m.lastTransfer.amount = amount
+	m.lastTransfer.status = status
+	return m.transferErr
+}
+
+func TestTransferFunds_AmountNotPositive_LogsFailedAndReturnsError(t *testing.T) {
+	repo := &mockRepo{}
 	svc := transaction.NewService(repo)
 
-	_ = svc.AddTransaction(&transaction.Transaction{UserID: 2, Amount: 10, Status: "success"})
-	_ = svc.AddTransaction(&transaction.Transaction{UserID: 2, Amount: 20, Status: "failed"})
-
-	txList := svc.ListUserTransactions(2)
-	if len(txList) < 2 {
-		t.Errorf("expected at least 2 tx for user 2, got %d", len(txList))
+	err := svc.TransferFunds(10, 20, 0, "success")
+	if err == nil {
+		t.Fatalf("expected error for non-positive amount, got nil")
 	}
-	for _, tx := range txList {
-		repo.DeleteTransaction(tx.ID)
+
+	if repo.lastTransfer.called {
+		t.Errorf("repo.TransferFunds should not be called when amount <= 0")
+	}
+
+	if len(repo.addedTxs) != 1 {
+		t.Fatalf("expected 1 failed log transaction, got %d", len(repo.addedTxs))
+	}
+	ft := repo.addedTxs[0]
+	if ft.UserID != 10 || ft.FromUserID != 10 || ft.ToUserID != 20 || ft.Amount != 0 || ft.Status != "failed" {
+		t.Errorf("unexpected failed tx log: %+v", ft)
 	}
 }
 
-func TestAllTransactions(t *testing.T) {
-	repo := setupDB(t)
+func TestTransferFunds_RepoError_LogsFailedAndReturnsError(t *testing.T) {
+	repo := &mockRepo{transferErr: errors.New("db failure")}
 	svc := transaction.NewService(repo)
 
-	_ = svc.AddTransaction(&transaction.Transaction{UserID: 5, Amount: 50, Status: "success"})
-	_ = svc.AddTransaction(&transaction.Transaction{UserID: 6, Amount: 60, Status: "failed"})
+	err := svc.TransferFunds(7, 8, 50, "success")
+	if err == nil {
+		t.Fatalf("expected error when repo.TransferFunds fails, got nil")
+	}
 
-	all, err := svc.AllTransactions()
+	if !repo.lastTransfer.called || repo.lastTransfer.fromUserID != 7 || repo.lastTransfer.toUserID != 8 ||
+		repo.lastTransfer.amount != 50 || repo.lastTransfer.status != "success" {
+		t.Errorf("unexpected transfer call: %+v", repo.lastTransfer)
+	}
+
+	if len(repo.addedTxs) != 1 {
+		t.Fatalf("expected 1 failed log transaction, got %d", len(repo.addedTxs))
+	}
+	ft := repo.addedTxs[0]
+	if ft.UserID != 7 || ft.FromUserID != 7 || ft.ToUserID != 8 || ft.Amount != 0 || ft.Status != "failed" {
+		t.Errorf("unexpected failed tx log: %+v", ft)
+	}
+}
+
+func TestListUserTransactions_ReturnsRepoData(t *testing.T) {
+	want := []transaction.Transaction{
+		{ID: 3, UserID: 2, Amount: 10, Status: "success"},
+		{ID: 2, UserID: 2, Amount: 20, Status: "failed"},
+	}
+	repo := &mockRepo{listByUserRet: want}
+	svc := transaction.NewService(repo)
+
+	got := svc.ListUserTransactions(2)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ListUserTransactions mismatch.\nwant: %+v\ngot:  %+v", want, got)
+	}
+}
+
+func TestAllTransactions_ReturnsRepoData(t *testing.T) {
+	want := []transaction.Transaction{
+		{ID: 11, UserID: 5, Amount: 100, Status: "success"},
+		{ID: 12, UserID: 6, Amount: 60, Status: "failed"},
+	}
+	repo := &mockRepo{listAllRet: want}
+	svc := transaction.NewService(repo)
+
+	got, err := svc.AllTransactions()
 	if err != nil {
-		t.Fatalf("error on AllTransactions: %v", err)
+		t.Fatalf("AllTransactions returned error: %v", err)
 	}
-	if len(all) < 2 {
-		t.Errorf("expected at least 2 tx, got %d", len(all))
-	}
-
-	for _, tx := range all {
-		repo.DeleteTransaction(tx.ID)
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AllTransactions mismatch.\nwant: %+v\ngot:  %+v", want, got)
 	}
 }

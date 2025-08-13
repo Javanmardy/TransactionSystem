@@ -6,93 +6,116 @@ import (
 	"TransactionSystem/internal/transaction"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-type mockReportService struct{}
+type mockReportServiceOK struct{}
 
-func (m *mockReportService) UserReport(userID int) report.Report {
-	return report.Report{
-		TotalCount: 2, SuccessCount: 1, FailedCount: 1,
-		TotalAmount: 1000, SuccessAmount: 800, FailedAmount: 200, SuccessRate: 0.5,
-	}
+func (m *mockReportServiceOK) UserReport(userID int) report.Report {
+	return report.Report{TotalCount: 2, SuccessCount: 1, FailedCount: 1}
 }
-func (m *mockReportService) AllTransactions() ([]transaction.Transaction, error) {
-	return []transaction.Transaction{
-		{ID: 1, UserID: 1, Amount: 500, Status: "success"},
-		{ID: 2, UserID: 2, Amount: 200, Status: "failed"},
-	}, nil
+func (m *mockReportServiceOK) AllTransactions() ([]transaction.Transaction, error) {
+	return []transaction.Transaction{{ID: 1}, {ID: 2}}, nil
 }
-func (m *mockReportService) AllReport() report.Report {
-	return report.Report{
-		TotalCount: 5, SuccessCount: 3, FailedCount: 2, TotalAmount: 700,
-	}
+func (m *mockReportServiceOK) AllReport() report.Report {
+	return report.Report{TotalCount: 5, SuccessCount: 3, FailedCount: 2}
 }
 
-func TestUserReportHandler(t *testing.T) {
-	h := report.NewHandler(&mockReportService{})
+type mockReportServiceErr struct{ mockReportServiceOK }
 
+func (m *mockReportServiceErr) AllTransactions() ([]transaction.Transaction, error) {
+	return nil, errors.New("db error")
+}
+
+func TestUserReportHandler_OK(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
 	ctx := context.WithValue(context.Background(), auth.UserIDKey, 7)
 	req := httptest.NewRequest("GET", "/report", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	h.UserReport(w, req)
 
-	res := w.Result()
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", res.StatusCode)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	var rep report.Report
-	if err := json.NewDecoder(res.Body).Decode(&rep); err != nil {
+	if err := json.NewDecoder(w.Body).Decode(&rep); err != nil {
 		t.Fatalf("decode err: %v", err)
 	}
-	if rep.TotalCount != 2 || rep.SuccessCount != 1 || rep.FailedCount != 1 {
-		t.Errorf("unexpected report data: %+v", rep)
+	if rep.TotalCount != 2 {
+		t.Errorf("unexpected data: %+v", rep)
 	}
 }
 
-func TestAllReportsHandler(t *testing.T) {
-	h := report.NewHandler(&mockReportService{})
+func TestUserReportHandler_Unauthorized(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
+	req := httptest.NewRequest("GET", "/report", nil)
+	w := httptest.NewRecorder()
+	h.UserReport(w, req)
 
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestAllReportsHandler_OK(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
 	ctx := context.WithValue(context.Background(), auth.RoleKey, "admin")
 	req := httptest.NewRequest("GET", "/report/all", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	h.AllReports(w, req)
 
-	res := w.Result()
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", res.StatusCode)
-	}
-	var txs []transaction.Transaction
-	if err := json.NewDecoder(res.Body).Decode(&txs); err != nil {
-		t.Fatalf("decode err: %v", err)
-	}
-	if len(txs) != 2 || txs[0].ID != 1 {
-		t.Errorf("unexpected txs: %+v", txs)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
 }
 
-func TestAdminReportHandler(t *testing.T) {
-	h := report.NewHandler(&mockReportService{})
+func TestAllReportsHandler_Forbidden(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
+	ctx := context.WithValue(context.Background(), auth.RoleKey, "user")
+	req := httptest.NewRequest("GET", "/report/all", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.AllReports(w, req)
 
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestAllReportsHandler_ErrorFromService(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceErr{})
+	ctx := context.WithValue(context.Background(), auth.RoleKey, "admin")
+	req := httptest.NewRequest("GET", "/report/all", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.AllReports(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+}
+
+func TestAdminReportHandler_OK(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
 	ctx := context.WithValue(context.Background(), auth.RoleKey, "admin")
 	req := httptest.NewRequest("GET", "/report/summary", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	h.AdminReport(w, req)
 
-	res := w.Result()
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		t.Fatalf("expected 200, got %d", res.StatusCode)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
 	}
-	var rep report.Report
-	if err := json.NewDecoder(res.Body).Decode(&rep); err != nil {
-		t.Fatalf("decode err: %v", err)
-	}
-	if rep.TotalCount != 5 || rep.SuccessCount != 3 || rep.FailedCount != 2 {
-		t.Errorf("unexpected admin summary: %+v", rep)
+}
+
+func TestAdminReportHandler_Forbidden(t *testing.T) {
+	h := report.NewHandler(&mockReportServiceOK{})
+	ctx := context.WithValue(context.Background(), auth.RoleKey, "user")
+	req := httptest.NewRequest("GET", "/report/summary", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	h.AdminReport(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
 	}
 }

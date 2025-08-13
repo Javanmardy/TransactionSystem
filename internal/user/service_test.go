@@ -9,6 +9,7 @@ import (
 )
 
 func setupTestDB(t *testing.T) *sql.DB {
+	t.Helper()
 	db, err := sql.Open("mysql", "root:n61224n61224@tcp(localhost:3306)/transaction_db?parseTime=true")
 	if err != nil {
 		t.Fatalf("failed to connect db: %v", err)
@@ -28,8 +29,7 @@ func TestAddUserAndGetUserByID(t *testing.T) {
 		Role:     "user",
 		Email:    "t@t.com",
 	}
-	err := svc.AddUser(u)
-	if err != nil {
+	if err := svc.AddUser(u); err != nil {
 		t.Fatalf("AddUser error: %v", err)
 	}
 	got := svc.GetUserByID(u.ID)
@@ -71,5 +71,51 @@ func TestListAllUsers(t *testing.T) {
 	}
 	if len(users) < 2 {
 		t.Errorf("expected at least 2 users, got %d", len(users))
+	}
+}
+
+func TestGetUserByID_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	svc := user.NewMySQLService(db)
+
+	got := svc.GetUserByID(999999)
+	if got != nil {
+		t.Errorf("Expected nil, got %+v", got)
+	}
+}
+
+func TestGetUserByUsername_NotFound(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	svc := user.NewMySQLService(db)
+
+	got := svc.GetUserByUsername("no_user_hopefully")
+	if got != nil {
+		t.Errorf("Expected nil, got %+v", got)
+	}
+}
+
+func TestListAllUsers_Empty(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+	svc := user.NewMySQLService(db)
+
+	users, err := svc.ListAllUsers()
+	if err != nil {
+		t.Fatalf("ListAllUsers error: %v", err)
+	}
+	if len(users) != 0 {
+		t.Errorf("Expected empty list, got %d users", len(users))
+	}
+}
+
+func TestAddUser_DBClosed_Error(t *testing.T) {
+	db := setupTestDB(t)
+	svc := user.NewMySQLService(db)
+	db.Close()
+	u := &user.User{Username: "x", Password: "y", Role: "user", Email: "x@y.z"}
+	if err := svc.AddUser(u); err == nil {
+		t.Fatalf("expected error when DB is closed, got nil")
 	}
 }
