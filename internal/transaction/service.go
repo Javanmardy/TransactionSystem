@@ -54,12 +54,23 @@ func (s *service) TransferFunds(fromUserID, toUserID int, amount float64, status
 	}
 
 	cm := cache.GetManager()
-	senderTx := &Transaction{UserID: fromUserID, Amount: -amount, Status: status}
-	receiverTx := &Transaction{UserID: toUserID, Amount: amount, Status: status}
+	senderTx := &Transaction{
+		UserID:     fromUserID,
+		FromUserID: fromUserID,
+		ToUserID:   toUserID,
+		Amount:     -amount,
+		Status:     status,
+	}
+	receiverTx := &Transaction{
+		UserID:     toUserID,
+		FromUserID: fromUserID,
+		ToUserID:   toUserID,
+		Amount:     amount,
+		Status:     status,
+	}
 
 	b1, _ := json.Marshal(senderTx)
 	b2, _ := json.Marshal(receiverTx)
-
 	_ = cm.PushRecent(fromUserID, string(b1), 20)
 	_ = cm.PushRecent(toUserID, string(b2), 20)
 

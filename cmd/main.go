@@ -22,17 +22,31 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-
+/********** SIM CONFIG **********/
 const (
-	simBaseURL   = "http://localhost:8080"
-	simUsers     = 60   // چند کاربر بسازد
-	simTPS       = 1    // تراکنش بر ثانیه هدف
-	simWorkers   = 12   // تعداد goroutine ها
-	seedBalances = true // شارژ اولیه؟
-	seedMin      = 300  // حداقل شارژ
-	seedMax      = 1200 // حداکثر شارژ
-	adminUser    = "u2" // ادمین موجود
-	adminPass    = "p2" // پسورد ادمین
+	simBaseURL = "http://localhost:8080"
+
+	// تعداد کاربرهای شبیه‌سازی
+	simUsers = 50
+
+	// نرخ پویا: بین 1 تا 10 تراکنش در ثانیه (کل سیستم)
+	tpsMin = 1
+	tpsMax = 10
+
+	// هم‌زمانی کارگرها
+	simWorkers = 12
+
+	// seeding
+	seedBalances = true
+	seedMin      = 400
+	seedMax      = 1500
+
+	// درصد Fail عمدی
+	failRate = 0.10
+
+	// ادمین
+	adminUser = "admin"
+	adminPass = "admin"
 )
 
 type loginResp struct {
@@ -58,9 +72,13 @@ func main() {
 	}
 	defer db.Close()
 
-	// ---- Server setup ----
+	if err := resetDB(db); err != nil {
+		log.Fatalf("reset db failed: %v", err)
+	}
+
 	fs := http.FileServer(http.Dir("./ui"))
 	http.Handle("/", fs)
+
 	userService := user.NewMySQLService(db)
 	txRepo := transaction.NewDBRepo(db)
 	txService := transaction.NewService(txRepo)
@@ -82,6 +100,7 @@ func main() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+
 	userHandler := user.NewHandler(userService)
 	http.Handle("/users", auth.AuthMiddleware(http.HandlerFunc(userHandler.ListUsers)))
 
@@ -92,6 +111,7 @@ func main() {
 	http.Handle("/report/all", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AllReports)))
 	http.Handle("/report", auth.AuthMiddleware(http.HandlerFunc(reportHandler.UserReport)))
 	http.Handle("/report/summary", auth.AuthMiddleware(http.HandlerFunc(reportHandler.AdminReport)))
+
 	http.Handle("/tx/", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		idStr := strings.TrimPrefix(r.URL.Path, "/tx/")
 		id, _ := strconv.Atoi(idStr)
@@ -105,45 +125,77 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(tx)
+		_ = json.NewEncoder(w).Encode(tx)
 	})))
 
-	// ---- Simulation Goroutine ----
-	go runSimulation()
+	go runSimulation(db)
+
 	log.Println("Server running at :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
+/********** DB RESET & ADMIN **********/
+func resetDB(db *sql.DB) error {
+	log.Println("[reset] truncating tables...")
+	_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=0")
+	if _, err := db.Exec("TRUNCATE TABLE transactions"); err != nil {
+		return err
+	}
+	if _, err := db.Exec("TRUNCATE TABLE users"); err != nil {
+		return err
+	}
+	_, _ = db.Exec("SET FOREIGN_KEY_CHECKS=1")
+	log.Println("[reset] done.")
+	return nil
+}
+
+func promoteAdmin(db *sql.DB, username string) {
+	_, _ = db.Exec(`UPDATE users SET role='admin' WHERE username=?`, username)
+}
+
 /********** SIMULATION **********/
-func runSimulation() {
+func runSimulation(db *sql.DB) {
 	time.Sleep(2 * time.Second)
 	rand.Seed(time.Now().UnixNano())
 
-	users := make([]simUser, 0, simUsers)
-	for i := 0; i < simUsers; i++ {
-		username := fmt.Sprintf("bot%d", rand.Intn(1_000_000))
-		password := "pass123"
-		email := username + "@mail.com"
+	if _, err := apiRegister(adminUser, "admin@example.com", adminPass); err != nil {
+		log.Printf("[admin][register] warn: %v", err)
+	}
+	promoteAdmin(db, adminUser)
+	adminToken, err := apiLogin(adminUser, adminPass)
+	if err != nil {
+		log.Printf("[admin][login][ERR]: %v", err)
+		return
+	}
+	log.Printf("[admin][login][OK]")
 
-		// register
-		regID, regErr := apiRegister(username, email, password)
+	users := make([]simUser, 0, simUsers)
+	used := map[string]struct{}{}
+
+	for len(users) < simUsers {
+		username, email := randomUserIdentFA()
+		if _, dupe := used[username]; dupe {
+			continue
+		}
+		used[username] = struct{}{}
+		password := "P" + strconv.Itoa(100000+rand.Intn(900000))
+
+		id, regErr := apiRegister(username, email, password)
 		if regErr != nil {
 			log.Printf("[register][ERR] user=%s err=%v", username, regErr)
 			continue
 		}
-		log.Printf("[register][OK] user=%s id=%d", username, regID)
+		log.Printf("[register][OK] user=%s id=%d", username, id)
 
-		// login
-		token, loginErr := apiLogin(username, password)
+		tok, loginErr := apiLogin(username, password)
 		if loginErr != nil {
 			log.Printf("[login][ERR] user=%s err=%v", username, loginErr)
 			continue
 		}
 		log.Printf("[login][OK] user=%s", username)
 
-		id := regID
 		if id == 0 {
-			if fetchedID, err := apiFindUserID(token, username); err == nil {
+			if fetchedID, err := apiFindUserID(tok, username); err == nil {
 				id = fetchedID
 			}
 		}
@@ -151,8 +203,7 @@ func runSimulation() {
 			log.Printf("[user-id][ERR] user=%s no id", username)
 			continue
 		}
-
-		users = append(users, simUser{ID: id, Username: username, Token: token})
+		users = append(users, simUser{ID: id, Username: username, Token: tok})
 	}
 
 	if len(users) < 2 {
@@ -161,50 +212,76 @@ func runSimulation() {
 	}
 
 	if seedBalances {
-		if err := apiSeedBalances(users); err != nil {
+		if err := apiSeedBalancesWithToken(users, adminToken); err != nil {
 			log.Printf("[seed][WARN] %v", err)
 		} else {
-			log.Printf("[seed][OK] seeded %d users", len(users))
+			log.Printf("[seed][OK] %d users", len(users))
 		}
 	}
 
-	perWorker := float64(simTPS) / float64(simWorkers)
-	log.Printf("[sim] start traffic: users=%d workers=%d tps=%d (≈%.2f per worker)",
-		len(users), simWorkers, simTPS, perWorker)
+	log.Printf("[sim] traffic: users=%d workers=%d tps=%d..%d", len(users), simWorkers, tpsMin, tpsMax)
+
+	type job struct {
+		from simUser
+		toID int
+		amt  float64
+	}
+	jobs := make(chan job, 4096)
 
 	var wg sync.WaitGroup
 	for w := 0; w < simWorkers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			interval := time.Duration(float64(time.Second) / perWorker)
-			if interval < time.Millisecond {
-				interval = time.Millisecond
+			for j := range jobs {
+				if err := apiTransfer(j.from.Token, j.toID, j.amt); err != nil {
+					log.Printf("[tx][FAIL] from=%d to=%d amt=%.0f err=%v", j.from.ID, j.toID, j.amt, err)
+				} else {
+					log.Printf("[tx][OK]   from=%d to=%d amt=%.0f", j.from.ID, j.toID, j.amt)
+				}
 			}
-			t := time.NewTicker(interval)
-			defer t.Stop()
+		}()
+	}
 
-			for range t.C {
-				// pick random distinct users
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		rand.Seed(time.Now().UnixNano())
+
+		for {
+			targetTPS := tpsMin + rand.Intn(tpsMax-tpsMin+1)
+			if targetTPS < 1 {
+				targetTPS = 1
+			}
+
+			for i := 0; i < targetTPS; i++ {
 				from := users[rand.Intn(len(users))]
 				to := users[rand.Intn(len(users))]
 				if from.ID == to.ID {
 					continue
 				}
-				amount := float64(rand.Intn(90) + 10)
 
-				if err := apiTransfer(from.Token, to.ID, amount); err != nil {
-					log.Printf("[tx][FAIL] from=%d to=%d amt=%.0f err=%v", from.ID, to.ID, amount, err)
+				var amount float64
+				if rand.Float64() < failRate {
+					amount = float64(50_000 + rand.Intn(150_000))
 				} else {
-					log.Printf("[tx][OK] from=%d to=%d amt=%.0f", from.ID, to.ID, amount)
+					amount = float64(10 + rand.Intn(90))
 				}
+
+				delay := time.Duration(rand.Intn(1000)) * time.Millisecond
+				go func(f simUser, toID int, amt float64, d time.Duration) {
+					time.Sleep(d)
+					jobs <- job{from: f, toID: toID, amt: amt}
+				}(from, to.ID, amount, delay)
 			}
-		}()
-	}
-	wg.Wait()
+
+			<-ticker.C
+		}
+	}()
+
+	select {}
 }
 
-/********** API helpers **********/
 func apiRegister(username, email, password string) (int, error) {
 	b, _ := json.Marshal(map[string]any{
 		"username": username, "email": email, "password": password,
@@ -263,13 +340,7 @@ func apiFindUserID(token, username string) (int, error) {
 	return 0, fmt.Errorf("not found")
 }
 
-func apiSeedBalances(users []simUser) error {
-	// admin login
-	tok, err := apiLogin(adminUser, adminPass)
-	if err != nil {
-		return fmt.Errorf("admin login failed: %w", err)
-	}
-
+func apiSeedBalancesWithToken(users []simUser, adminToken string) error {
 	type batchTx struct {
 		UserID int     `json:"user_id"`
 		Amount float64 `json:"amount"`
@@ -288,7 +359,7 @@ func apiSeedBalances(users []simUser) error {
 
 	req, _ := http.NewRequest(http.MethodPost, simBaseURL+"/batch", bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Authorization", "Bearer "+adminToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -315,4 +386,38 @@ func apiTransfer(token string, toUserID int, amount float64) error {
 		return fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+var faFirst = []string{
+	"amir", "reza", "mohammad", "sara", "maryam", "ali", "zahra", "fatemeh", "hossein", "mahdi",
+	"hamed", "niloufar", "saeed", "elham", "parisa", "shaghayegh", "mina", "farzad", "kian", "yasaman",
+}
+var faLast = []string{
+	"mohammadi", "ahmadi", "hosseini", "jafari", "ghasemi", "moradi", "karimi", "heidari", "abbasi", "soleimani",
+	"sadeghi", "rahimi", "ghorbani", "hashemi", "amini", "norouzi", "majidi", "kazemi", "mousavi", "ghanbari",
+}
+var emailDomains = []string{
+	"gmail.com", "yahoo.com", "outlook.com", "proton.me", "icloud.com",
+}
+
+func randomUserIdentFA() (username, email string) {
+	fn := faFirst[rand.Intn(len(faFirst))]
+	ln := faLast[rand.Intn(len(faLast))]
+	dom := emailDomains[rand.Intn(len(emailDomains))]
+	n := 10 + rand.Intn(90) // 10..99
+
+	switch rand.Intn(5) {
+	case 0:
+		username = fn + "." + ln
+	case 1:
+		username = fn + "_" + ln
+	case 2:
+		username = fn + ln + strconv.Itoa(n)
+	case 3:
+		username = string(fn[0]) + ln + strconv.Itoa(n)
+	default:
+		username = ln + "." + fn
+	}
+	email = username + "@" + dom
+	return
 }
