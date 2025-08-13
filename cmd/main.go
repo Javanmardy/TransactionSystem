@@ -20,7 +20,14 @@ import (
 	"TransactionSystem/internal/user"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/joho/godotenv"
 )
+
+func init() {
+	if err := godotenv.Load(); err != nil {
+		log.Println("No .env file found or error loading .env:", err)
+	}
+}
 
 /********** SIM CONFIG **********/
 const (
